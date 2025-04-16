@@ -1,6 +1,17 @@
 import requests
 import os
 
+def normalize(text):
+    return text.lower().replace("-", " ").replace("  ", " ").strip()
+
+def find_matching_account(user_input, account_dict):
+    input_keywords = normalize(user_input).split()
+
+    for normalized_name, (original, record_id) in account_dict.items():
+        if all(keyword in normalized_name for keyword in input_keywords):
+            return record_id
+    return None
+
 class AirtableClient:
     def __init__(self):
         self.token = os.getenv("AIRTABLE_PAT")
@@ -17,25 +28,15 @@ class AirtableClient:
         response = requests.get(url, headers=self.headers)
         data = response.json()
 
-        mapping = {}  # {normalized string: (full name, record_id)}
+        mapping = {}  # {normalized name: (original full name, record_id)}
 
         for record in data.get("records", []):
             full_name = record["fields"].get("REG")
             if full_name:
-                normalized = full_name.lower().replace("-", "").replace("  ", " ").strip()
+                normalized = normalize(full_name)
                 mapping[normalized] = (full_name, record["id"])
 
         return mapping
-
-    def find_matching_account(user_input, account_dict):
-    input_keywords = user_input.lower().split()
-
-    for normalized_name, (original, record_id) in account_dict.items():
-        if all(keyword in normalized_name for keyword in input_keywords):
-            return record_id  # return record ID of best match
-
-    return None
-
 
     def add_record(self, fields: dict):
         data = {
@@ -43,4 +44,3 @@ class AirtableClient:
         }
         response = requests.post(self.endpoint, headers=self.headers, json=data)
         return response.json()
-
