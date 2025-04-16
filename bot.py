@@ -20,7 +20,7 @@ async def handler(event):
         parts = [p.strip() for p in text.split("|")]
 
         fields = {
-            "Data": datetime.datetime.strptime(parts[0], "%d.%m.%Y").date().isoformat(),
+            "DATE": datetime.datetime.strptime(parts[0], "%d.%m.%Y").date().isoformat(),
             "БАНКА/БУКИ": [parts[1]],
             "INCOME £": float(parts[2]),
             "OUTCOME £": float(parts[3]),
