@@ -12,6 +12,31 @@ class AirtableClient:
             "Content-Type": "application/json"
         }
 
+    def get_linked_accounts(self):
+        url = f"https://api.airtable.com/v0/{self.base_id}/ВСИЧКИ%20АКАУНТИ"
+        response = requests.get(url, headers=self.headers)
+        data = response.json()
+
+        mapping = {}  # {normalized string: (full name, record_id)}
+
+        for record in data.get("records", []):
+            full_name = record["fields"].get("REG")
+            if full_name:
+                normalized = full_name.lower().replace("-", "").replace("  ", " ").strip()
+                mapping[normalized] = (full_name, record["id"])
+
+        return mapping
+
+    def find_matching_account(user_input, account_dict):
+    input_keywords = user_input.lower().split()
+
+    for normalized_name, (original, record_id) in account_dict.items():
+        if all(keyword in normalized_name for keyword in input_keywords):
+            return record_id  # return record ID of best match
+
+    return None
+
+
     def add_record(self, fields: dict):
         data = {
             "fields": fields
