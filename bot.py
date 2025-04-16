@@ -9,6 +9,6 @@ load_dotenv()
 bot_token = os.getenv("BOT_TOKEN")
 
 # Стартираме само с bot_token – без API_ID и API_HASH
-client = TelegramClient('bot_session', api_id=None, api_hash=None).start(bot_token=bot_token)
+client = TelegramClient('bot_session', 0, 'bot').start(bot_token=bot_token)
 airtable = AirtableClient()
 
