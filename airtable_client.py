@@ -2,7 +2,15 @@ import requests
 import os
 
 def normalize(text):
-    return text.lower().replace("-", " ").replace("  ", " ").strip()
+    return (
+        text.lower()
+        .replace("-", " ")
+        .replace("_", " ")
+        .replace("–", " ")
+        .replace("—", " ")
+        .replace("  ", " ")
+        .strip()
+    )
 
 def find_matching_account(user_input, account_dict):
     input_keywords = normalize(user_input).split()
@@ -28,8 +36,7 @@ class AirtableClient:
         response = requests.get(url, headers=self.headers)
         data = response.json()
 
-        mapping = {}  # {normalized name: (original full name, record_id)}
-
+        mapping = {}
         for record in data.get("records", []):
             full_name = record["fields"].get("REG")
             if full_name:
