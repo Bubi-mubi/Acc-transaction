@@ -23,6 +23,12 @@ async def handler(event):
         linked_accounts = airtable.get_linked_accounts()
         record_id = find_matching_account(parts[1], linked_accounts)
 
+        print("🔎 Ключови думи:", parts[1])
+        print("📦 Заредени акаунти от Airtable:")
+        for norm, (full, rid) in linked_accounts.items():
+            print(f"- {full} ➜ {rid} (нормализирано: {norm})")
+
+
         if not record_id:
             await event.reply("⚠️ Не можах да открия акаунта по подадените ключови думи.")
             return
