@@ -36,7 +36,12 @@ async def handler(event):
         }
 
         result = airtable.add_record(fields)
-        await event.reply("✅ Записът беше добавен успешно в Airtable!")
+        print("Airtable Response:", result)  # 👉 виж какво казва API-то
+        if 'id' in result:
+            await event.reply("✅ Записът беше добавен успешно в Airtable!")
+        else:
+            await event.reply(f"⚠️ Airtable не прие заявката:\n{result}")
+
 
     except Exception as e:
         await event.reply(f"⚠️ Грешка: {e}")
