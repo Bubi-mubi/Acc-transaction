@@ -86,6 +86,8 @@ async def smart_input_handler(event):
 # 👆 Обработка на бутони
 @client.on(events.CallbackQuery)
 async def button_handler(event):
+    await event.answer("📨 Обработвам...")  # <-- добави това
+
     data = event.data.decode("utf-8")
     action, user_id = data.split("|")
 
