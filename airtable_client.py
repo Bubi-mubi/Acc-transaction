@@ -20,6 +20,7 @@ class AirtableClient:
         self.table_name = os.getenv("AIRTABLE_TABLE_NAME")
         self.endpoint = f"https://api.airtable.com/v0/{self.base_id}/{self.table_name}"
         self.base_url = f"https://api.airtable.com/v0/{self.base_id}"
+        self.cached_accounts = None
         self.headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json"
@@ -41,6 +42,9 @@ class AirtableClient:
             print(f"❌ Грешка при обновяване на NOTES за {record_id}: {response.text}")
 
     def get_linked_accounts(self):
+        if self.cached_accounts is not None:
+            return self.cached_accounts
+
         url = f"https://api.airtable.com/v0/{self.base_id}/ВСИЧКИ%20АКАУНТИ"
         mapping = {}
         offset = None
@@ -63,7 +67,9 @@ class AirtableClient:
             if not offset:
                 break
 
-        return mapping
+    self.cached_accounts = mapping
+    return mapping
+
 
     def find_matching_account(self, user_input, account_dict=None):
         if account_dict is None:
