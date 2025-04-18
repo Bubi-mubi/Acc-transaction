@@ -89,7 +89,12 @@ async def button_handler(event):
     await event.answer("⏳ Момент...")
 
     data = event.data.decode("utf-8")
+
+    if "|" not in data:
+        return  # игнорира бутони без | (например статус бутоните)
+
     action, user_id = data.split("|")
+
 
     if user_id not in bot_memory:
         await event.answer("❌ Няма активна операция.")
