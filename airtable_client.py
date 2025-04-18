@@ -75,17 +75,20 @@ class AirtableClient:
         return response.json()
 
     def update_status(self, record_id, status):
+        print(f"➡️ Обновяване на запис: {record_id} със STATUS: {status}")
+
         url = f"{self.base_url}/{self.table_name}/{record_id}"
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json"
-        }
         data = {
             "fields": {
                 "STATUS": status
             }
         }
-        response = requests.patch(url, json=data, headers=headers)
+
+        response = requests.patch(url, json=data, headers=self.headers, params={"typecast": "true"})
+
+        print("⬅️ Отговор от Airtable:", response.status_code, response.text)
+
         if response.status_code != 200:
-            print(f"Грешка при обновяване на {record_id}: {response.text}")
+            print(f"❌ Грешка при обновяване на {record_id}: {response.text}")
+
 
