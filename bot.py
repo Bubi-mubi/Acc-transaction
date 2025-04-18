@@ -139,7 +139,8 @@ async def save_transfer(event, user_id):
     if not sender_id or not receiver_id:
         await event.respond("⚠️ Не можах да открия и двете страни в акаунтите.")
         return
-
+    status = data["status"]
+    
     fields_common = {
         "DATE": data["date"],
         "STATUS NEW": status,
