@@ -1,7 +1,6 @@
 import os
 import requests
-import difflib  # за fuzzy
-# 👆 Увери се, че го има най-горе!
+import difflib
 
 def normalize(text):
     return (
@@ -27,15 +26,27 @@ class AirtableClient:
 
     def get_linked_accounts(self):
         url = f"https://api.airtable.com/v0/{self.base_id}/ВСИЧКИ%20АКАУНТИ"
-        response = requests.get(url, headers=self.headers)
-        data = response.json()
-
         mapping = {}
-        for record in data.get("records", []):
-            full_name = record["fields"].get("REG")
-            if full_name:
-                normalized = normalize(full_name)
-                mapping[normalized] = (full_name, record["id"])
+        offset = None
+
+        while True:
+            full_url = url
+            if offset:
+                full_url += f"?offset={offset}"
+
+            response = requests.get(full_url, headers=self.headers)
+            data = response.json()
+
+            for record in data.get("records", []):
+                full_name = record["fields"].get("REG")
+                if full_name:
+                    normalized = normalize(full_name)
+                    mapping[normalized] = (full_name, record["id"])
+
+            offset = data.get("offset")
+            if not offset:
+                break
+
         return mapping
 
     def find_matching_account(self, user_input, account_dict=None):
