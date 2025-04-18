@@ -64,17 +64,15 @@ async def smart_input_handler(event):
         await event.reply("❌ Неразпозната валута.")
         return
 
-    user_id = str(event.sender_id)
-    bot_memory[user_id] = {
-        "amount": amount,
-        "currency": currency_key,
-        "sender": sender,
-        "receiver": receiver,
-        "date": event.message.date.date().isoformat(),
-        "action": None,
-        "status": None,
-        "note": ""
-    }
+        user_id = str(event.sender_id)  # ← тук конвертираме ID-то в string
+        bot_memory[user_id] = {
+            "amount": amount,
+            "currency": currency_key,
+            "sender": sender,
+            "receiver": receiver,
+            "date": event.message.date.date().isoformat()
+        }
+
 
     await event.respond(
         f"📌 Разпознах: {amount} {currency_key} от *{sender}* към *{receiver}*.\nКакъв е видът на плащането?",
@@ -90,7 +88,7 @@ async def smart_input_handler(event):
 async def button_handler(event):
     data = event.data.decode("utf-8")
     parts = data.split("|")
-    user_id = parts[1]
+    user_id = str(parts[1])
 
     if user_id not in bot_memory:
         await event.answer("❌ Няма активна операция.")
