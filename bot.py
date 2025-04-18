@@ -1,6 +1,8 @@
+# 🟩 bot.py
+
 from telethon import TelegramClient, events
-from telethon.tl.custom import Button
 from dotenv import load_dotenv
+from telethon.tl.custom import Button
 import os
 import re
 from airtable_client import AirtableClient
@@ -11,11 +13,18 @@ api_id = int(os.getenv("API_ID"))
 api_hash = os.getenv("API_HASH")
 bot_token = os.getenv("BOT_TOKEN")
 
-client = TelegramClient("bot_session", api_id, api_hash).start(bot_token=bot_token)
+client = TelegramClient('bot_session', api_id, api_hash).start(bot_token=bot_token)
 airtable = AirtableClient()
 
 bot_memory = {}
 user_last_records = {}
+
+# 🧠 Възможните колони с пари, по твоята Airtable таблица
+VALID_AMOUNT_COLUMNS = [
+    "INCOME £", "OUTCOME £", "DEPOSIT £", "WITHDRAW £",
+    "INCOME BGN", "OUTCOME BGN", "DEPOSIT BGN", "WITHDRAW BGN",
+    "INCOME EU", "OUTCOME EU", "DEPOSIT EU", "WITHDRAW EU"
+]
 
 def normalize(text):
     return (
@@ -103,15 +112,30 @@ async def button_handler(event):
 
     if len(parts) == 2:
         bot_memory[user_id]["action"] = action.upper()
-
-        # Ако искаш да използваш статуси – тук можеш да добавиш втори кръг с бутони
-        await save_transfer(event, user_id)
+        await event.edit("🟡 Какъв е статусът на трансакцията?",
+            buttons=[
+                [Button.inline("Pending", f"status|Pending|{user_id}".encode())],
+                [Button.inline("Blocked", f"status|Blocked|{user_id}".encode())],
+                [Button.inline("Arrived", f"status|Arrived|{user_id}".encode())]
+            ])
         return
+
+    if action == "status":
+        status = parts[1].strip().title()
+        bot_memory[user_id]["status"] = status
+        await save_transfer(event, user_id)
 
 async def save_transfer(event, user_id):
     data = bot_memory.get(user_id)
-    col_base = f"{data['action']} {data['currency']}".upper()
-    linked_accounts = airtable.get_linked_accounts()
+    action = data['action']
+    currency = data['currency']
+    col_base = f"{action} {currency}".upper()
+
+    if col_base not in VALID_AMOUNT_COLUMNS:
+        await event.respond(f"❌ Колона `{col_base}` не съществува. Провери дали има такава в Airtable.")
+        return
+
+    linked_accounts = airtable.get_linked_accounts_from_table("ВСИЧКИ АКАУНТИ")
 
     sender_id = receiver_id = None
     sender_label = receiver_label = ""
@@ -130,6 +154,7 @@ async def save_transfer(event, user_id):
 
     fields_common = {
         "DATE": data["date"],
+        "ТРАНЗАКЦИЯ СТАТУС": data.get("status", ""),
         "ЧИИ ПАРИ": "",
         "NOTES": ""
     }
@@ -146,8 +171,8 @@ async def save_transfer(event, user_id):
         col_base: abs(data["amount"]),
     }
 
-    out_result = airtable.add_record(out_fields)
-    in_result = airtable.add_record(in_fields)
+    out_result = airtable.add_record_to_table("Acc Transaction", out_fields)
+    in_result = airtable.add_record_to_table("Acc Transaction", in_fields)
 
     if 'id' in out_result and 'id' in in_result:
         await event.respond(f"✅ Записите са добавени успешно:\n❌ {sender_label}\n✅ {receiver_label}")
@@ -156,25 +181,3 @@ async def save_transfer(event, user_id):
         await event.respond(f"⚠️ Грешка при запис:\nOUT: {out_result}\nIN: {in_result}")
 
     bot_memory.pop(user_id, None)
-
-@client.on(events.NewMessage(pattern=r'^/notes'))
-async def handle_notes(event):
-    user_id = str(event.sender_id)
-    if user_id not in user_last_records:
-        await event.reply("⚠️ Няма наскорошна трансакция, към която да добавя бележка.")
-        return
-
-    await event.reply("✍️ Моля, напиши бележката:")
-
-    @client.on(events.NewMessage(from_users=event.sender_id))
-    async def capture_note(note_event):
-        note = note_event.raw_text
-        record_ids = user_last_records[user_id]
-
-        for record_id in record_ids:
-            airtable.update_record(record_id, {"NOTES": note})
-
-        await note_event.reply("📝 Бележката беше успешно записана към последната трансакция.")
-        client.remove_event_handler(capture_note)
-
-client.run_until_disconnected()
