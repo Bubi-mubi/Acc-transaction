@@ -24,6 +24,16 @@ class AirtableClient:
             "Content-Type": "application/json"
         }
 
+    def get_status_options(self):
+        url = f"https://api.airtable.com/v0/{self.base_id}/STATUS"
+        headers = {
+            "Authorization": f"Bearer {self.api_key}"
+        }
+        response = requests.get(url, headers=headers)
+        records = response.json().get("records", [])
+        return {record["fields"]["STAT"]: record["id"] for record in records if "STAT" in record["fields"]}
+
+
     def get_linked_accounts(self):
         url = f"https://api.airtable.com/v0/{self.base_id}/ВСИЧКИ%20АКАУНТИ"
         mapping = {}
