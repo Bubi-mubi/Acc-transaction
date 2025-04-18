@@ -1,8 +1,7 @@
-
 from telethon import TelegramClient, events
+from telethon.tl.custom import Button
 from airtable_client import AirtableClient
 from dotenv import load_dotenv
-from telethon.tl.custom import Button
 import os
 import re
 
@@ -113,15 +112,14 @@ async def button_handler(event):
         return
 
     if action == "status":
-        status_label = parts[1].strip()
-        bot_memory[user_id]["status"] = status_label
+        bot_memory[user_id]["status"] = parts[1]
         await save_transfer(event, user_id)
 
+# ✅ Запис в Airtable
 async def save_transfer(event, user_id):
-    data = bot_memory.get(user_id)
+    data = bot_memory.pop(user_id)
     col_base = f"{data['action']} {data['currency']}".upper()
     linked_accounts = airtable.get_linked_accounts()
-    status_options = airtable.get_status_options()
 
     sender_id = receiver_id = None
     sender_label = receiver_label = ""
@@ -138,14 +136,11 @@ async def save_transfer(event, user_id):
         await event.respond("⚠️ Не можах да открия и двете страни в акаунтите.")
         return
 
-    status_id = status_options.get(data["status"])
-    if not status_id:
-        await event.respond(f"⚠️ Статусът {data['status']} не съществува в таблицата STATUS.")
-        return
+    status = data.get("status", "").strip()
 
     fields_common = {
         "DATE": data["date"],
-        "STATUS": [status_id],
+        "STATUS": status,
         "ЧИИ ПАРИ": "",
         "NOTES": ""
     }
@@ -166,33 +161,28 @@ async def save_transfer(event, user_id):
     in_result = airtable.add_record(in_fields)
 
     if 'id' in out_result and 'id' in in_result:
-        await event.respond(
-    f"✅ Записите са добавени успешно:\n❌ {sender_label}\n✅ {receiver_label}"
-        )
-        user_last_records[user_id] = [out_result['id'], in_result['id']]
+        await event.respond(f"✅ Записите са добавени успешно:\n❌ {sender_label}\n✅ {receiver_label}")
+        user_last_records[user_id] = [out_result["id"], in_result["id"]]
     else:
         await event.respond(f"⚠️ Грешка при запис:\nOUT: {out_result}\nIN: {in_result}")
 
-    bot_memory.pop(user_id, None)
-
-@client.on(events.NewMessage(pattern=r'^/notes'))
+# 📝 Бележки
+@client.on(events.NewMessage(pattern=r"^/notes"))
 async def handle_notes(event):
     user_id = str(event.sender_id)
     if user_id not in user_last_records:
         await event.reply("⚠️ Няма наскорошна трансакция, към която да добавя бележка.")
         return
 
-    await event.reply("✍️ Моля, напиши бележката:")
+    await event.reply("✍️ Моля, въведи бележката:")
 
     @client.on(events.NewMessage(from_users=event.sender_id))
     async def capture_note(note_event):
         note = note_event.raw_text
         record_ids = user_last_records[user_id]
-
         for record_id in record_ids:
             airtable.update_record(record_id, {"NOTES": note})
-
-        await note_event.reply("📝 Бележката беше успешно записана към последната трансакция.")
+        await note_event.reply("📝 Бележката беше добавена успешно.")
         client.remove_event_handler(capture_note)
 
 client.run_until_disconnected()
