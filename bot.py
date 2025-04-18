@@ -163,10 +163,10 @@ async def button_handler(event):
     async def handle_status_selection(event):
         status_value = event.pattern_match.group(1)
         if isinstance(status_value, bytes):
-        status_value = status_value.decode("utf-8")
+            status_value = status_value.decode("utf-8")
         status_value = status_value.capitalize()
+        
         user_id = event.sender_id
-
         last_ids = bot_memory.get(user_id, {}).get('last_airtable_ids', [])
     
         if not last_ids:
