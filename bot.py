@@ -105,9 +105,9 @@ async def button_handler(event):
         bot_memory[user_id]["action"] = action.upper()
         await event.edit("🟡 Какъв е статусът на трансакцията?",
             buttons=[
-                [Button.inline("🟡 Pending", f"status|🟡 Pending|{user_id}".encode())],
-                [Button.inline("🔴 Blocked", f"status|🔴 Blocked|{user_id}".encode())],
-                [Button.inline("🟢 Arrived", f"status|🟢 Arrived|{user_id}".encode())]
+                [Button.inline("Pending", f"status|Pending|{user_id}".encode())],
+                [Button.inline("Blocked", f"status|Blocked|{user_id}".encode())],
+                [Button.inline("Arrived", f"status|Arrived|{user_id}".encode())]
             ])
         return
 
