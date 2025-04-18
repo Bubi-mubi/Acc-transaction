@@ -25,29 +25,29 @@ class AirtableClient:
         }
 
     def get_linked_accounts(self):
-    url = f"https://api.airtable.com/v0/{self.base_id}/ВСИЧКИ%20АКАУНТИ"
-    mapping = {}
-    offset = None
+        url = f"https://api.airtable.com/v0/{self.base_id}/ВСИЧКИ%20АКАУНТИ"
+        mapping = {}
+        offset = None
 
-    while True:
-        full_url = url
-        if offset:
-            full_url += f"?offset={offset}"
+        while True:
+            full_url = url
+            if offset:
+                full_url += f"?offset={offset}"
 
-        response = requests.get(full_url, headers=self.headers)
-        data = response.json()
+            response = requests.get(full_url, headers=self.headers)
+            data = response.json()
 
-        for record in data.get("records", []):
-            full_name = record["fields"].get("REG")
-            if full_name:
-                normalized = normalize(full_name)
-                mapping[normalized] = (full_name, record["id"])
+            for record in data.get("records", []):
+                full_name = record["fields"].get("REG")
+                if full_name:
+                    normalized = normalize(full_name)
+                    mapping[normalized] = (full_name, record["id"])
 
-        offset = data.get("offset")
-        if not offset:
-            break
+            offset = data.get("offset")
+            if not offset:
+                break
 
-    return mapping
+        return mapping
 
     def find_matching_account(self, user_input, account_dict=None):
         if account_dict is None:
