@@ -86,14 +86,6 @@ async def smart_input_handler(event):
         ]
     )
 
-        buttons=[
-            [Button.inline("INCOME", f"income|{user_id}".encode()),
-             Button.inline("OUTCOME", f"outcome|{user_id}".encode())],
-            [Button.inline("DEPOSIT", f"deposit|{user_id}".encode()),
-             Button.inline("WITHDRAW", f"withdraw|{user_id}".encode())]
-        ]
-    )
-
 @client.on(events.CallbackQuery)
 async def button_handler(event):
     data = event.data.decode("utf-8")
