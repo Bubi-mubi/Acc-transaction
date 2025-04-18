@@ -137,8 +137,38 @@ async def button_handler(event):
     in_result = airtable.add_record(in_fields)
 
     if 'id' in out_result and 'id' in in_result:
-        await event.edit(f"✅ Два записа добавени успешно:\n\n❌ - {sender_label}\n✅ + {receiver_label}")
+        # запазваме ID на записите за текущия потребител
+        bot_memory[event.sender_id] = {
+            'last_airtable_ids': [out_result['id'], in_result['id']]
+        }
+
+        # показваме статус бутоните
+        await event.edit(
+            f"✅ Два записа добавени успешно:\n\n❌ - {sender_label}\n✅ + {receiver_label}\n\n📌 Избери статус:",
+            buttons=[
+                [Button.inline("Pending", b"status_pending")],
+                [Button.inline("Arrived", b"status_arrived")],
+                [Button.inline("Blocked", b"status_blocked")]
+            ]
+        )
     else:
         await event.edit(f"⚠️ Грешка при запис:\nOUT: {out_result}\nIN: {in_result}")
+
+    @client.on(events.CallbackQuery(pattern=b'status_(pending|arrived|blocked)'))
+    async def handle_status_selection(event):
+        status_value = event.pattern_match.group(1).capitalize()
+        user_id = event.sender_id
+
+        last_ids = bot_memory.get(user_id, {}).get('last_airtable_ids', [])
+    
+        if not last_ids:
+            await event.answer("❌ Няма запазени записи за обновяване.", alert=True)
+            return
+
+        for record_id in last_ids:
+            airtable.update_status(record_id, status_value)
+
+        await event.edit(f"📌 Статусът е зададен на: {status_value}")
+
 
 client.run_until_disconnected()
