@@ -1,25 +1,15 @@
 from telethon import TelegramClient, events
-from airtable_client import AirtableClient
+from airtable_client import AirtableClient, find_matching_account
 from dotenv import load_dotenv
 from telethon.tl.custom import Button
 import os
+import datetime
 import re
 
 load_dotenv()
 
+# Памет за временни данни от потребители
 bot_memory = {}
-user_last_records = {}
-
-def normalize(text):
-    return (
-        text.lower()
-        .replace("-", " ")
-        .replace("_", " ")
-        .replace("–", " ")
-        .replace("—", " ")
-        .replace("  ", " ")
-        .strip()
-    )
 
 CURRENCY_SYNONYMS = {
     "£": ["паунд", "паунда", "paund", "paunda", "gbp", "gb"],
@@ -42,32 +32,76 @@ bot_token = os.getenv("BOT_TOKEN")
 client = TelegramClient('bot_session', api_id, api_hash).start(bot_token=bot_token)
 airtable = AirtableClient()
 
-# 💬 Начално съобщение
+@client.on(events.NewMessage(pattern=r'^Добави:'))
+async def handler(event):
+    try:
+        text = event.raw_text.replace("Добави:", "").strip()
+        parts = [p.strip() for p in text.split("|")]
+
+        # 🔍 Взимаме акаунти и търсим по ключови думи
+        linked_accounts = airtable.get_linked_accounts()
+        record_id = find_matching_account(parts[1], linked_accounts)
+
+        print("🔎 Ключови думи:", parts[1])
+        print("📦 Заредени акаунти от Airtable:")
+        for norm, (full, rid) in linked_accounts.items():
+            print(f"- {full} ➜ {rid} (нормализирано: {norm})")
+
+        if not record_id:
+            await event.reply("⚠️ Не можах да открия акаунта по подадените ключови думи.")
+            return
+
+        # ✅ Подготвяме запис
+        fields = {
+            "DATE": event.message.date.date().isoformat(),
+            "БАНКА/БУКИ": [record_id],
+            "INCOME £": float(parts[2]),
+            "OUTCOME £": float(parts[3]),
+            "DEPOSIT £": float(parts[4]),
+            "WITHDRAW £": float(parts[5]),
+            "INCOME BGN": float(parts[6]),
+            "OUTCOME BGN": float(parts[7]),
+            "DEPOSIT BGN": float(parts[8]),
+            "WITHDRAW BGN": float(parts[9]),
+            "STATUS": parts[10],
+            "ЧИИ ПАРИ": parts[11],
+            "NOTES": parts[12] if len(parts) > 12 else ""
+        }
+
+        result = airtable.add_record(fields)
+        print("Airtable Response:", result)
+        if 'id' in result:
+            await event.reply("✅ Записът беше добавен успешно в Airtable!")
+        else:
+            await event.reply(f"⚠️ Airtable не прие заявката:\n{result}")
+
+    except Exception as e:
+        await event.reply(f"⚠️ Грешка: {e}")
+
+# 💬 Разпознаване на изречение като: "100 паунда от X към Y"
 @client.on(events.NewMessage)
 async def smart_input_handler(event):
-    if event.raw_text.startswith("/notes"):
-        return
-
     match = re.search(
         r'(\d+(?:[.,]\d{1,2})?)\s*([а-яa-zA-Z.]+)\s+(?:от|ot)\s+(.+?)\s+(?:към|kum|kym)\s+(.+)',
         event.raw_text,
         re.IGNORECASE
     )
     if not match:
+        print("❌ Не съвпада с шаблона:", event.raw_text)
         return
 
     amount = float(match.group(1).replace(",", "."))
     currency_raw = match.group(2).strip()
     sender = match.group(3).strip()
     receiver = match.group(4).strip()
+
     currency_key = get_currency_key(currency_raw)
 
     if not currency_key:
-        await event.reply("❌ Неразпозната валута.")
+        await event.reply("❌ Не мога да разбера валутата. Моля, използвай: лв, lv, паунд, eur, долар и т.н.")
         return
 
-    user_id = str(event.sender_id)
-
+    user_id = event.sender_id
     bot_memory[user_id] = {
         "amount": amount,
         "currency": currency_key,
@@ -76,118 +110,65 @@ async def smart_input_handler(event):
         "date": event.message.date.date().isoformat()
     }
 
-
-    await event.reply(
+    await event.respond(
         f"📌 Разпознах: {amount} {currency_key} от *{sender}* към *{receiver}*.\nКакъв е видът на плащането?",
         buttons=[
-            [Button.inline("INCOME", f"income|{user_id}".encode()),
-             Button.inline("OUTCOME", f"outcome|{user_id}".encode())],
-            [Button.inline("DEPOSIT", f"deposit|{user_id}".encode()),
-             Button.inline("WITHDRAW", f"withdraw|{user_id}".encode())]
+            [Button.inline("INCOME", b"income"), Button.inline("OUTCOME", b"outcome")],
+            [Button.inline("DEPOSIT", b"deposit"), Button.inline("WITHDRAW", b"withdraw")]
         ]
     )
-
-# 🟡 Обработка на бутони
+    
+# 👆 Обработка на избрания тип плащане
+@client.on(events.CallbackQuery)
 @client.on(events.CallbackQuery)
 async def button_handler(event):
-    data = event.data.decode("utf-8")
-    parts = data.split("|")
-
-    if len(parts) < 2:
-        await event.answer("❌ Невалиден бутон.")
-        return
-
-    action = parts[0]
-    user_id = str(parts[-1])
-
+    user_id = event.sender_id
     if user_id not in bot_memory:
         await event.answer("❌ Няма активна операция.")
         return
 
-    if len(parts) == 2:
-        bot_memory[user_id]["action"] = action.upper()
+    action = event.data.decode("utf-8").upper()
+    payment = bot_memory.pop(user_id)
 
-        await event.edit("🟡 Какъв е статусът на трансакцията?",
-            buttons=[
-                [Button.inline("Pending", f"status|Pending|{user_id}".encode())],
-                [Button.inline("Blocked", f"status|Blocked|{user_id}".encode())],
-                [Button.inline("Arrived", f"status|Arrived|{user_id}".encode())]
-            ])
-        return
+    # 🗂️ Генерираме името на колоната според валутата
+    col_base = f"{action} {payment['currency']}"  # напр. INCOME BGN
 
-    if action == "status":
-        status = parts[1]
-        bot_memory[user_id]["status"] = status
-        await save_transfer(event, user_id)
-
-# ✅ Запис в Airtable
-async def save_transfer(event, user_id):
-    data = bot_memory.pop(user_id)
-    col_base = f"{data['action']} {data['currency']}".upper()
+    # Взимаме акаунтите от Airtable
     linked_accounts = airtable.get_linked_accounts()
-
-    sender_id = receiver_id = None
-    sender_label = receiver_label = ""
-
-    for norm, (label, record_id) in linked_accounts.items():
-        if all(kw in norm for kw in normalize(data['sender']).split()):
-            sender_id = record_id
-            sender_label = label
-        if all(kw in norm for kw in normalize(data['receiver']).split()):
-            receiver_id = record_id
-            receiver_label = label
+    sender_id = find_matching_account(payment['sender'], linked_accounts)
+    receiver_id = find_matching_account(payment['receiver'], linked_accounts)
 
     if not sender_id or not receiver_id:
-        await event.respond("⚠️ Не можах да открия и двете страни в акаунтите.")
+        await event.edit("⚠️ Не можах да открия и двете страни в акаунтите.")
         return
 
-    fields_common = {
-        "DATE": data["date"],
-        "STATUS": data["status"],
-        "ЧИИ ПАРИ": "",
-        "NOTES": ""
-    }
-
+    # ❌ OUT запис (от sender)
     out_fields = {
-        **fields_common,
+        "DATE": payment["date"],
         "БАНКА/БУКИ": [sender_id],
-        col_base: -abs(data["amount"]),
+        col_base: -abs(payment["amount"]),  # винаги отрицателно
+        "STATUS": "Pending",
+        "ЧИИ ПАРИ": "ФИРМА",
+        "NOTES": f"{payment['sender']} ➡️ {payment['receiver']}"
     }
 
+    # ✅ IN запис (в receiver)
     in_fields = {
-        **fields_common,
+        "DATE": payment["date"],
         "БАНКА/БУКИ": [receiver_id],
-        col_base: abs(data["amount"]),
+        col_base: abs(payment["amount"]),  # винаги положително
+        "STATUS": "Pending",
+        "ЧИИ ПАРИ": "ФИРМА",
+        "NOTES": f"{payment['sender']} ➡️ {payment['receiver']}"
     }
 
+    # Записваме и двата реда
     out_result = airtable.add_record(out_fields)
     in_result = airtable.add_record(in_fields)
 
     if 'id' in out_result and 'id' in in_result:
-        await event.respond(f"✅ Записите са добавени:\n❌ {sender_label}\n✅ {receiver_label}")
-        user_last_records[user_id] = [out_result['id'], in_result['id']]
+        await event.edit("✅ Два записа бяха добавени: изходящ и входящ трансфер!")
     else:
-        await event.respond(f"⚠️ Грешка при запис:\nOUT: {out_result}\nIN: {in_result}")
-
-# 📝 /notes команда
-@client.on(events.NewMessage(pattern=r'^/notes'))
-async def handle_notes(event):
-    user_id = str(event.sender_id)
-    if user_id not in user_last_records:
-        await event.reply("⚠️ Няма наскорошна трансакция, към която да добавя бележка.")
-        return
-
-    await event.reply("✍️ Моля, напиши бележката:")
-
-    @client.on(events.NewMessage(from_users=event.sender_id))
-    async def capture_note(note_event):
-        note = note_event.raw_text
-        record_ids = user_last_records[user_id]
-
-        for record_id in record_ids:
-            airtable.update_record(record_id, {"NOTES": note})
-
-        await note_event.reply("📝 Бележката беше успешно записана към последната трансакция.")
-        client.remove_event_handler(capture_note)
+        await event.edit(f"⚠️ Грешка при запис:\nOUT: {out_result}\nIN: {in_result}")
 
 client.run_until_disconnected()
