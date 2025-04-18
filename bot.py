@@ -80,7 +80,12 @@ async def handler(event):
 
 # 💬 Разпознаване на изречение като: "100 паунда от X към Y"
 @client.on(events.NewMessage)
-    match = re.search(r'(\d+(?:[.,]\d{1,2})?)\s*([а-яa-zА-ЯA-Z.]+)\s+от\s+(.+?)\s+(?:към|kym|kum)\s+(.+)', event.raw_text, re.IGNORECASE)
+async def smart_input_handler(event):
+    match = re.search(
+        r'(\d+(?:[.,]\d{1,2})?)\s*([а-яa-zА-ЯA-Z.]+)\s+от\s+(.+?)\s+(?:към|kym|kum)\s+(.+)',
+        event.raw_text,
+        re.IGNORECASE
+    )
     if not match:
         return
 
@@ -111,7 +116,7 @@ async def handler(event):
             [Button.inline("DEPOSIT", b"deposit"), Button.inline("WITHDRAW", b"withdraw")]
         ]
     )
-
+    
 # 👆 Обработка на избрания тип плащане
 @client.on(events.CallbackQuery)
 async def button_handler(event):
