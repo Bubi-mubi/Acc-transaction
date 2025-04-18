@@ -88,30 +88,42 @@ async def smart_input_handler(event):
 # 🟡 Въпрос за статус
 @client.on(events.CallbackQuery)
 async def button_handler(event):
-    await event.answer("⏳")
-
     data = event.data.decode("utf-8")
     parts = data.split("|")
-    user_id = str(parts[1])
+
+    if len(parts) < 2:
+        await event.answer("❌ Невалиден бутон.")
+        return
+
+    action = parts[0]
+    user_id = str(parts[-1])  # последният елемент винаги е user_id
 
     if user_id not in bot_memory:
         await event.answer("❌ Няма активна операция.")
         return
 
+    # 👉 Първо избира тип трансакция (INCOME, OUTCOME и т.н.)
     if len(parts) == 2:
-        # Първо избира Action
-        bot_memory[user_id]["action"] = parts[0].upper()
+        bot_memory[user_id]["action"] = action.upper()
+
         await event.edit("🟡 Какъв е статусът на трансакцията?",
-                         buttons=[
-                             [Button.inline("Pending", f"status|Pending|{user_id}".encode())],
-                             [Button.inline("Blocked", f"status|Blocked|{user_id}".encode())],
-                             [Button.inline("Arrived", f"status|Arrived|{user_id}".encode())]
-                         ])
-    elif parts[0] == "status":
+            buttons=[
+                [Button.inline("Pending", f"status|Pending|{user_id}".encode())],
+                [Button.inline("Blocked", f"status|Blocked|{user_id}".encode())],
+                [Button.inline("Arrived", f"status|Arrived|{user_id}".encode())]
+            ])
+        return
+
+    # 👉 След това избира статус
+    if action == "status":
         status = parts[1]
         bot_memory[user_id]["status"] = status
-        await save_transfer(event, user_id)  # <--- това липсва
 
+        await event.edit("📝 Ако искаш да добавиш бележка, напиши `/notes`.\n\nАко не – записът ще се направи без бележка.")
+        return
+
+    await event.answer("❌ Непозната операция.")
+    
 # 📝 Команда за бележки
 @client.on(events.NewMessage(pattern=r'^/notes'))
 async def handle_notes(event):
