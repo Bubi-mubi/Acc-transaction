@@ -141,6 +141,10 @@ async def button_handler(event):
     for norm, (full, id_) in linked_accounts.items():
         print(f"➡️ {norm} → {full} ({id_})")
 
+    print("📦 NORMALIZED REG от Airtable:")
+    for norm, (original, rid) in linked_accounts.items():
+        print(f"- {norm}  →  {original}")
+
     # 🔍 Търсим акаунти чрез метода от класа AirtableClient
     sender_id = airtable.find_matching_account(payment['sender'], linked_accounts)
     receiver_id = airtable.find_matching_account(payment['receiver'], linked_accounts)
