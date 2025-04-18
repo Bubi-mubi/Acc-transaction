@@ -55,9 +55,9 @@ class AirtableClient:
                 full_url += f"?offset={offset}"
 
             response = requests.get(full_url, headers=self.headers)
-            data = response.json()
+        data = response.json()
 
-            for record in data.get("records", []):
+        for record in data.get("records", []):
                 full_name = record["fields"].get("REG")
                 if full_name:
                     normalized = normalize(full_name)
@@ -67,8 +67,9 @@ class AirtableClient:
             if not offset:
                 break
 
-    self.cached_accounts = mapping
-    return mapping
+        self.cached_accounts = mapping
+        return mapping
+
 
 
     def find_matching_account(self, user_input, account_dict=None):
