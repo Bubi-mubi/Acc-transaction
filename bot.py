@@ -8,6 +8,7 @@ import re
 load_dotenv()
 
 bot_memory = {}
+user_last_records = {}
 
 def normalize(text):
     return (
@@ -41,7 +42,7 @@ bot_token = os.getenv("BOT_TOKEN")
 client = TelegramClient('bot_session', api_id, api_hash).start(bot_token=bot_token)
 airtable = AirtableClient()
 
-# 💬 Старт: "100 лв от A към B"
+# 💬 Начално съобщение
 @client.on(events.NewMessage)
 async def smart_input_handler(event):
     if event.raw_text.startswith("/notes"):
@@ -66,7 +67,6 @@ async def smart_input_handler(event):
         return
 
     user_id = str(event.sender_id)
-
     bot_memory[user_id] = {
         "amount": amount,
         "currency": currency_key,
@@ -85,7 +85,7 @@ async def smart_input_handler(event):
         ]
     )
 
-# 🟡 Въпрос за статус
+# 🟡 Обработка на бутони
 @client.on(events.CallbackQuery)
 async def button_handler(event):
     data = event.data.decode("utf-8")
@@ -96,13 +96,12 @@ async def button_handler(event):
         return
 
     action = parts[0]
-    user_id = str(parts[-1])  # последният елемент винаги е user_id
+    user_id = str(parts[-1])
 
     if user_id not in bot_memory:
         await event.answer("❌ Няма активна операция.")
         return
 
-    # 👉 Първо избира тип трансакция (INCOME, OUTCOME и т.н.)
     if len(parts) == 2:
         bot_memory[user_id]["action"] = action.upper()
 
@@ -114,31 +113,10 @@ async def button_handler(event):
             ])
         return
 
-    # 👉 След това избира статус
     if action == "status":
         status = parts[1]
         bot_memory[user_id]["status"] = status
-
-        await event.edit("📝 Ако искаш да добавиш бележка, напиши `/notes`.\n\nАко не – записът ще се направи без бележка.")
-        return
-
-    await event.answer("❌ Непозната операция.")
-    
-# 📝 Команда за бележки
-@client.on(events.NewMessage(pattern=r'^/notes'))
-async def handle_notes(event):
-    user_id = str(event.sender_id)
-    if user_id not in bot_memory:
-        await event.reply("⚠️ Няма активна операция, към която да добавя бележка.")
-        return
-
-    await event.reply("✍️ Моля, въведи бележката:")
-
-    @client.on(events.NewMessage(from_users=event.sender_id))
-    async def capture_note(note_event):
-        bot_memory[user_id]["note"] = note_event.raw_text
-        await save_transfer(note_event, user_id)
-        client.remove_event_handler(capture_note)
+        await save_transfer(event, user_id)
 
 # ✅ Запис в Airtable
 async def save_transfer(event, user_id):
@@ -165,7 +143,7 @@ async def save_transfer(event, user_id):
         "DATE": data["date"],
         "STATUS": data["status"],
         "ЧИИ ПАРИ": "",
-        "NOTES": data.get("note", "")
+        "NOTES": ""
     }
 
     out_fields = {
@@ -185,7 +163,29 @@ async def save_transfer(event, user_id):
 
     if 'id' in out_result and 'id' in in_result:
         await event.respond(f"✅ Записите са добавени:\n❌ {sender_label}\n✅ {receiver_label}")
+        user_last_records[user_id] = [out_result['id'], in_result['id']]
     else:
         await event.respond(f"⚠️ Грешка при запис:\nOUT: {out_result}\nIN: {in_result}")
+
+# 📝 /notes команда
+@client.on(events.NewMessage(pattern=r'^/notes'))
+async def handle_notes(event):
+    user_id = str(event.sender_id)
+    if user_id not in user_last_records:
+        await event.reply("⚠️ Няма наскорошна трансакция, към която да добавя бележка.")
+        return
+
+    await event.reply("✍️ Моля, напиши бележката:")
+
+    @client.on(events.NewMessage(from_users=event.sender_id))
+    async def capture_note(note_event):
+        note = note_event.raw_text
+        record_ids = user_last_records[user_id]
+
+        for record_id in record_ids:
+            airtable.update_record(record_id, {"NOTES": note})
+
+        await note_event.reply("✅ Бележката беше добавена към последния запис.")
+        client.remove_event_handler(capture_note)
 
 client.run_until_disconnected()
