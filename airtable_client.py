@@ -1,7 +1,6 @@
 import os
 import requests
-import difflib  # за fuzzy
-# 👆 Увери се, че го има най-горе!
+import difflib
 
 def normalize(text):
     return (
