@@ -1,5 +1,5 @@
-import requests
 import os
+import requests
 
 def normalize(text):
     return (
@@ -11,14 +11,6 @@ def normalize(text):
         .replace("  ", " ")
         .strip()
     )
-
-def find_matching_account(user_input, account_dict):
-    input_keywords = normalize(user_input).split()
-
-    for normalized_name, (original, record_id) in account_dict.items():
-        if all(keyword in normalized_name for keyword in input_keywords):
-            return record_id
-    return None
 
 class AirtableClient:
     def __init__(self):
@@ -44,6 +36,18 @@ class AirtableClient:
                 mapping[normalized] = (full_name, record["id"])
 
         return mapping
+
+    def find_matching_account(self, user_input, account_dict=None):
+        if account_dict is None:
+            account_dict = self.get_linked_accounts()
+
+        input_keywords = normalize(user_input).split()
+
+        for normalized_name, (original, record_id) in account_dict.items():
+            if all(keyword in normalized_name for keyword in input_keywords):
+                return record_id  # ✔ намерено
+
+        return None  # ❌ не е намерено
 
     def add_record(self, fields: dict):
         data = {
