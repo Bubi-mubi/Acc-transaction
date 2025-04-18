@@ -67,6 +67,7 @@ async def smart_input_handler(event):
         return
 
     user_id = str(event.sender_id)
+
     bot_memory[user_id] = {
         "amount": amount,
         "currency": currency_key,
@@ -74,6 +75,7 @@ async def smart_input_handler(event):
         "receiver": receiver,
         "date": event.message.date.date().isoformat()
     }
+
 
     await event.respond(
         f"📌 Разпознах: {amount} {currency_key} от *{sender}* към *{receiver}*.\nКакъв е видът на плащането?",
@@ -185,7 +187,7 @@ async def handle_notes(event):
         for record_id in record_ids:
             airtable.update_record(record_id, {"NOTES": note})
 
-        await note_event.reply("✅ Бележката беше добавена към последния запис.")
+        await note_event.reply("📝 Бележката беше успешно записана към последната трансакция.")
         client.remove_event_handler(capture_note)
 
 client.run_until_disconnected()
