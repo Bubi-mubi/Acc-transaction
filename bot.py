@@ -43,7 +43,30 @@ bot_token = os.getenv("BOT_TOKEN")
 client = TelegramClient('bot_session', api_id, api_hash).start(bot_token=bot_token)
 airtable = AirtableClient()
 
-# 💬 Основно съобщение тип "100 lv ot A kum B"
+
+@client.on(events.NewMessage)
+async def note_input_handler(event):
+    user_id = event.sender_id
+    if user_id not in bot_memory:
+        return
+
+    if not bot_memory[user_id].get("awaiting_note"):
+        return  # не чакаме бележка
+
+    note_text = event.raw_text.strip()
+    record_ids = bot_memory[user_id].get("last_airtable_ids", [])
+
+    if not record_ids:
+        await event.respond("⚠️ Не са намерени записи.")
+        return
+
+    for record_id in record_ids:
+        airtable.update_notes(record_id, note_text)
+
+    await event.respond("✅ Бележката беше добавена успешно.")
+    bot_memory[user_id]["awaiting_note"] = False
+
+
 @client.on(events.NewMessage)
 async def smart_input_handler(event):
     match = re.search(
@@ -83,7 +106,7 @@ async def smart_input_handler(event):
         ]
     )
 
-# 👆 Обработка на бутони
+
 @client.on(events.CallbackQuery)
 async def button_handler(event):
     await event.answer("⏳ Момент...")
@@ -94,7 +117,6 @@ async def button_handler(event):
         return  # игнорира бутони без | (например статус бутоните)
 
     action, user_id = data.split("|")
-
 
     if user_id not in bot_memory:
         await event.answer("❌ Няма активна операция.")
@@ -142,12 +164,10 @@ async def button_handler(event):
     in_result = airtable.add_record(in_fields)
 
     if 'id' in out_result and 'id' in in_result:
-        # запазваме ID на записите за текущия потребител
         bot_memory[event.sender_id] = {
             'last_airtable_ids': [out_result['id'], in_result['id']]
         }
 
-        # показваме статус бутоните
         await event.edit(
             f"✅ Два записа добавени успешно:\n\n❌ - {sender_label}\n✅ + {receiver_label}\n\n📌 Избери статус:",
             buttons=[
@@ -159,24 +179,36 @@ async def button_handler(event):
     else:
         await event.edit(f"⚠️ Грешка при запис:\nOUT: {out_result}\nIN: {in_result}")
 
-    @client.on(events.CallbackQuery(pattern=b'status_(pending|arrived|blocked)'))
-    async def handle_status_selection(event):
-        status_value = event.pattern_match.group(1)
-        if isinstance(status_value, bytes):
-            status_value = status_value.decode("utf-8")
-        status_value = status_value.capitalize()
-        
-        user_id = event.sender_id
-        last_ids = bot_memory.get(user_id, {}).get('last_airtable_ids', [])
-    
-        if not last_ids:
-            await event.answer("❌ Няма запазени записи за обновяване.", alert=True)
-            return
 
-        for record_id in last_ids:
-            airtable.update_status(record_id, status_value)
+@client.on(events.CallbackQuery(pattern=b'status_(pending|arrived|blocked)'))
+async def handle_status_selection(event):
+    status_value = event.pattern_match.group(1)
+    if isinstance(status_value, bytes):
+        status_value = status_value.decode("utf-8")
+    status_value = status_value.capitalize()
 
-        await event.edit(f"📌 Статусът е зададен на: {status_value}")
+    user_id = event.sender_id
+    last_ids = bot_memory.get(user_id, {}).get('last_airtable_ids', [])
+
+    if not last_ids:
+        await event.answer("❌ Няма запазени записи за обновяване.", alert=True)
+        return
+
+    for record_id in last_ids:
+        airtable.update_status(record_id, status_value)
+
+    await event.edit(f"📌 Статусът е зададен на: {status_value}")
+
+
+@client.on(events.NewMessage(pattern="/notes"))
+async def notes_command_handler(event):
+    user_id = event.sender_id
+    if user_id not in bot_memory or 'last_airtable_ids' not in bot_memory[user_id]:
+        await event.respond("⚠️ Няма последни записи, към които да добавим бележка.")
+        return
+
+    bot_memory[user_id]['awaiting_note'] = True
+    await event.respond("📝 Каква бележка искаш да добавим към последните два записа?")
 
 
 client.run_until_disconnected()
