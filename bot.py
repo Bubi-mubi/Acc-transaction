@@ -76,7 +76,6 @@ async def smart_input_handler(event):
     }
 
     await event.reply(
-        await event.reply(
         f"📌 Разпознах: {amount} {currency_key} от *{sender}* към *{receiver}*.\nКакъв е видът на плащането?",
         buttons=[
             [Button.inline("INCOME", f"income|{user_id}".encode()),
@@ -85,6 +84,7 @@ async def smart_input_handler(event):
              Button.inline("WITHDRAW", f"withdraw|{user_id}".encode())]
         ]
     )
+
 
 @client.on(events.CallbackQuery)
 async def button_handler(event):
