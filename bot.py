@@ -156,7 +156,7 @@ async def button_handler(event):
         col_base: -abs(payment["amount"]),
         "STATUS": "Pending",
         "ЧИИ ПАРИ": "ФИРМА",
-        "NOTES": f"{sender_label} ➡️ {receiver_label}"
+        "NOTES": f"{sender_label} ➡️ {receiver_label}",
         "Въвел транзакцията": entered_by
     }
 
@@ -166,7 +166,7 @@ async def button_handler(event):
         col_base: abs(payment["amount"]),
         "STATUS": "Pending",
         "ЧИИ ПАРИ": "ФИРМА",
-        "NOTES": f"{sender_label} ➡️ {receiver_label}"
+        "NOTES": f"{sender_label} ➡️ {receiver_label}",
         "Въвел транзакцията": entered_by
     }
 
