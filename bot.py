@@ -41,10 +41,11 @@ bot_token = os.getenv("BOT_TOKEN")
 client = TelegramClient('bot_session', api_id, api_hash).start(bot_token=bot_token)
 airtable = AirtableClient()
 
+# 💬 Старт: "100 лв от A към B"
 @client.on(events.NewMessage)
 async def smart_input_handler(event):
     if event.raw_text.startswith("/notes"):
-        return  # ще го хванем отделно
+        return
 
     match = re.search(
         r'(\d+(?:[.,]\d{1,2})?)\s*([а-яa-zA-Z.]+)\s+(?:от|ot)\s+(.+?)\s+(?:към|kum|kym)\s+(.+)',
@@ -64,15 +65,15 @@ async def smart_input_handler(event):
         await event.reply("❌ Неразпозната валута.")
         return
 
-        user_id = str(event.sender_id)  # ← тук конвертираме ID-то в string
-        bot_memory[user_id] = {
-            "amount": amount,
-            "currency": currency_key,
-            "sender": sender,
-            "receiver": receiver,
-            "date": event.message.date.date().isoformat()
-        }
+    user_id = str(event.sender_id)
 
+    bot_memory[user_id] = {
+        "amount": amount,
+        "currency": currency_key,
+        "sender": sender,
+        "receiver": receiver,
+        "date": event.message.date.date().isoformat()
+    }
 
     await event.respond(
         f"📌 Разпознах: {amount} {currency_key} от *{sender}* към *{receiver}*.\nКакъв е видът на плащането?",
@@ -84,8 +85,11 @@ async def smart_input_handler(event):
         ]
     )
 
+# 🟡 Въпрос за статус
 @client.on(events.CallbackQuery)
 async def button_handler(event):
+    await event.answer("⏳")
+
     data = event.data.decode("utf-8")
     parts = data.split("|")
     user_id = str(parts[1])
@@ -95,7 +99,7 @@ async def button_handler(event):
         return
 
     if len(parts) == 2:
-        # Избор на Action
+        # Първо избира Action
         bot_memory[user_id]["action"] = parts[0].upper()
         await event.edit("🟡 Какъв е статусът на трансакцията?",
                          buttons=[
@@ -106,10 +110,11 @@ async def button_handler(event):
     elif parts[0] == "status":
         status = parts[1]
         bot_memory[user_id]["status"] = status
-        await event.edit(f"📝 Ако искаш да добавиш бележка, напиши `/notes`\n\nИначе просто не прави нищо – записът ще се направи без бележка.")
-    else:
-        await event.answer("❌ Невалидна операция.")
+        await event.edit(
+            "📝 Ако искаш да добавиш бележка, напиши /notes\n\nАко не – нищо не прави, ще запиша без бележка."
+        )
 
+# 📝 Команда за бележки
 @client.on(events.NewMessage(pattern=r'^/notes'))
 async def handle_notes(event):
     user_id = str(event.sender_id)
@@ -117,17 +122,18 @@ async def handle_notes(event):
         await event.reply("⚠️ Няма активна операция, към която да добавя бележка.")
         return
 
-    await event.reply("✍️ Моля, въведи бележката, която искаш да добавиш към записа:")
+    await event.reply("✍️ Моля, въведи бележката:")
 
     @client.on(events.NewMessage(from_users=event.sender_id))
     async def capture_note(note_event):
         bot_memory[user_id]["note"] = note_event.raw_text
         await save_transfer(note_event, user_id)
-        client.remove_event_handler(capture_note)  # премахваме handler-а
+        client.remove_event_handler(capture_note)
 
+# ✅ Запис в Airtable
 async def save_transfer(event, user_id):
     data = bot_memory.pop(user_id)
-    col_base = f"{data['action']} {data['currency']}"
+    col_base = f"{data['action']} {data['currency']}".upper()
     linked_accounts = airtable.get_linked_accounts()
 
     sender_id = receiver_id = None
@@ -148,7 +154,8 @@ async def save_transfer(event, user_id):
     fields_common = {
         "DATE": data["date"],
         "STATUS": data["status"],
-        "NOTES": data["note"]
+        "ЧИИ ПАРИ": "",
+        "NOTES": data.get("note", "")
     }
 
     out_fields = {
