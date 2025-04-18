@@ -101,7 +101,7 @@ async def smart_input_handler(event):
         await event.reply("❌ Не мога да разбера валутата. Моля, използвай: лв, lv, паунд, eur, долар и т.н.")
         return
 
-    user_id = event.sender_id
+    user_id = event._sender_id or (await event.get_sender()).id
     bot_memory[user_id] = {
         "amount": amount,
         "currency": currency_key,
@@ -121,7 +121,7 @@ async def smart_input_handler(event):
 # 👆 Обработка на избрания тип плащане
 @client.on(events.CallbackQuery)
 async def button_handler(event):
-    user_id = event.sender_id
+    user_id = event._sender_id or (await event.get_sender()).id
     if user_id not in bot_memory:
         await event.answer("❌ Няма активна операция.")
         return
