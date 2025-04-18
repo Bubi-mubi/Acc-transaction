@@ -27,7 +27,7 @@ class AirtableClient:
     def get_status_options(self):
         url = f"https://api.airtable.com/v0/{self.base_id}/STATUS"
         headers = {
-            "Authorization": f"Bearer {self.api_key}"
+            "Authorization": f"Bearer {self.token}"
         }
         response = requests.get(url, headers=headers)
         records = response.json().get("records", [])
