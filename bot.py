@@ -85,36 +85,36 @@ async def smart_input_handler(event):
         ]
     )
 
-@client.on(events.CallbackQuery)
-async def button_handler(event):
-    data = event.data.decode("utf-8")
-    parts = data.split("|")
+#@client.on(events.CallbackQuery)
+#async def button_handler(event):
+ #   data = event.data.decode("utf-8")
+  #  parts = data.split("|")
 
-    if len(parts) < 2:
-        await event.answer("❌ Невалиден бутон.")
-        return
+   # if len(parts) < 2:
+    #    await event.answer("❌ Невалиден бутон.")
+     #   return
 
-    action = parts[0]
-    user_id = str(parts[-1])
+   # action = parts[0]
+    #user_id = str(parts[-1])
 
-    if user_id not in bot_memory:
-        await event.answer("❌ Няма активна операция.")
-        return
+    #if user_id not in bot_memory:
+     #   await event.answer("❌ Няма активна операция.")
+      #  return
 
-    if len(parts) == 2:
-        bot_memory[user_id]["action"] = action.upper()
-        await event.edit("🟡 Какъв е статусът на трансакцията?",
-            buttons=[
-                [Button.inline("Pending", f"status|Pending|{user_id}".encode())],
-                [Button.inline("Blocked", f"status|Blocked|{user_id}".encode())],
-                [Button.inline("Arrived", f"status|Arrived|{user_id}".encode())]
-            ])
-        return
+    #if len(parts) == 2:
+     #   bot_memory[user_id]["action"] = action.upper()
+      #  await event.edit("🟡 Какъв е статусът на трансакцията?",
+       #     buttons=[
+        #        [Button.inline("Pending", f"status|Pending|{user_id}".encode())],
+         #       [Button.inline("Blocked", f"status|Blocked|{user_id}".encode())],
+          #      [Button.inline("Arrived", f"status|Arrived|{user_id}".encode())]
+           # ])
+        #return
 
-    if action == "status":
-        status = parts[1].strip().title()
-        bot_memory[user_id]["status"] = status
-        await save_transfer(event, user_id)
+   # if action == "status":
+    #    status = parts[1].strip().title()
+     #   bot_memory[user_id]["status"] = status
+      #  await save_transfer(event, user_id)
 
 async def save_transfer(event, user_id):
     data = bot_memory.get(user_id)
