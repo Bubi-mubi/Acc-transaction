@@ -91,6 +91,7 @@ async def smart_input_handler(event):
 @client.on(events.CallbackQuery)
 async def button_handler(event):
     data = event.data.decode("utf-8")
+    print("▶️ Callback data:", event.data)
     parts = data.split("|")
 
     if len(parts) < 2:
@@ -117,9 +118,14 @@ async def button_handler(event):
         return
 
     if action == "status":
-        status = parts[1]
+        if len(parts) < 3 or not parts[1].strip():
+            await event.respond("⚠️ Статусът е празен или невалиден.")
+            return
+
+        status = parts[1].strip().title()
         bot_memory[user_id]["status"] = status
         await save_transfer(event, user_id)
+
 
 # ✅ Запис в Airtable
 async def save_transfer(event, user_id):
