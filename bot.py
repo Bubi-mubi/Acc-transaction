@@ -110,9 +110,7 @@ async def button_handler(event):
     elif parts[0] == "status":
         status = parts[1]
         bot_memory[user_id]["status"] = status
-        await event.edit(
-            "📝 Ако искаш да добавиш бележка, напиши /notes\n\nАко не – нищо не прави, ще запиша без бележка."
-        )
+        await save_transfer(event, user_id)  # <--- това липсва
 
 # 📝 Команда за бележки
 @client.on(events.NewMessage(pattern=r'^/notes'))
