@@ -25,6 +25,21 @@ class AirtableClient:
             "Content-Type": "application/json"
         }
 
+    def update_notes(self, record_id, note):
+        url = f"{self.base_url}/{self.table_name}/{record_id}"
+        data = {
+            "fields": {
+                "NOTES": note
+            }
+        }
+
+        response = requests.patch(url, json=data, headers=self.headers, params={"typecast": "true"})
+
+        print(f"📝 Обновен NOTES за {record_id}: {response.status_code} – {response.text}")
+
+        if response.status_code != 200:
+            print(f"❌ Грешка при обновяване на NOTES за {record_id}: {response.text}")
+
     def get_linked_accounts(self):
         url = f"https://api.airtable.com/v0/{self.base_id}/ВСИЧКИ%20АКАУНТИ"
         mapping = {}
