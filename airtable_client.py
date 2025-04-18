@@ -109,3 +109,25 @@ class AirtableClient:
 
         if response.status_code != 200:
             print(f"❌ Грешка при обновяване на {record_id}: {response.text}")
+
+        from datetime import datetime, timedelta
+
+    def get_recent_user_records(self, user_filter_text, within_minutes=60):
+        now = datetime.utcnow()
+        cutoff = now - timedelta(minutes=within_minutes)
+        cutoff_iso = cutoff.isoformat()
+
+        filter_formula = f"AND(IS_AFTER(DATE, '{cutoff_iso}'), FIND('{user_filter_text}', {{NOTES}}))"
+        url = f"{self.endpoint}?filterByFormula={filter_formula}"
+
+        response = requests.get(url, headers=self.headers)
+        data = response.json()
+
+        return data.get("records", [])
+
+    def delete_record(self, record_id):
+        url = f"{self.base_url}/{self.table_name}/{record_id}"
+        response = requests.delete(url, headers=self.headers)
+        print(f"🗑️ Изтриване на запис {record_id}: {response.status_code}")
+        return response.status_code == 200
+
