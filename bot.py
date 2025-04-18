@@ -1,6 +1,7 @@
+
 from telethon import TelegramClient, events
-from dotenv import load_dotenv
 from telethon.tl.custom import Button
+from dotenv import load_dotenv
 import os
 import re
 from airtable_client import AirtableClient
@@ -66,7 +67,6 @@ async def smart_input_handler(event):
         return
 
     user_id = str(event.sender_id)
-
     bot_memory[user_id] = {
         "amount": amount,
         "currency": currency_key,
@@ -75,8 +75,9 @@ async def smart_input_handler(event):
         "date": event.message.date.date().isoformat()
     }
 
-    await event.respond(
-        f"📌 Разпознах: {amount} {currency_key} от *{sender}* към *{receiver}*.\nКакъв е видът на плащането?",
+    await event.reply(
+        f"📌 Разпознах: {amount} {currency_key} от *{sender}* към *{receiver}*.
+Какъв е видът на плащането?",
         buttons=[
             [Button.inline("INCOME", f"income|{user_id}".encode()),
              Button.inline("OUTCOME", f"outcome|{user_id}".encode())],
@@ -89,35 +90,19 @@ async def smart_input_handler(event):
 async def button_handler(event):
     data = event.data.decode("utf-8")
     parts = data.split("|")
-
-    if len(parts) < 2:
-        await event.answer("❌ Невалиден бутон.")
+    if len(parts) != 2:
         return
 
-    action = parts[0]
-    user_id = str(parts[-1])
-
+    action, user_id = parts
     if user_id not in bot_memory:
         await event.answer("❌ Няма активна операция.")
         return
 
-    if len(parts) == 2:
-        bot_memory[user_id]["action"] = action.upper()
-        await event.edit("🟡 Какъв е статусът на трансакцията?",
-            buttons=[
-                [Button.inline("Pending", f"status|Pending|{user_id}".encode())],
-                [Button.inline("Blocked", f"status|Blocked|{user_id}".encode())],
-                [Button.inline("Arrived", f"status|Arrived|{user_id}".encode())]
-            ])
-        return
-
-    if action == "status":
-        status = parts[1].strip().title()
-        bot_memory[user_id]["status"] = status
-        await save_transfer(event, user_id)
+    bot_memory[user_id]["action"] = action.upper()
+    await save_transfer(event, user_id)
 
 async def save_transfer(event, user_id):
-    data = bot_memory.get(user_id)
+    data = bot_memory.pop(user_id)
     col_base = f"{data['action']} {data['currency']}".upper()
     linked_accounts = airtable.get_linked_accounts()
 
@@ -136,16 +121,8 @@ async def save_transfer(event, user_id):
         await event.respond("⚠️ Не можах да открия и двете страни в акаунтите.")
         return
 
-    valid_statuses = ["Pending", "Blocked", "Arrived"]
-    status = data.get("status", "").strip().title()
-
-    if status not in valid_statuses:
-        await event.respond(f"⚠️ Невалиден статус: `{status}`. Избери един от: {', '.join(valid_statuses)}.")
-        return
-
     fields_common = {
         "DATE": data["date"],
-        "ТРАНЗАКЦИЯ СТАТУС": status,
         "ЧИИ ПАРИ": "",
         "NOTES": ""
     }
@@ -166,12 +143,12 @@ async def save_transfer(event, user_id):
     in_result = airtable.add_record(in_fields)
 
     if 'id' in out_result and 'id' in in_result:
-        await event.respond(f"✅ Записите са добавени успешно:\n❌ {sender_label}\n✅ {receiver_label}")
+        await event.respond(f"✅ Записите са добавени:
+❌ {sender_label}
+✅ {receiver_label}")
         user_last_records[user_id] = [out_result['id'], in_result['id']]
     else:
         await event.respond(f"⚠️ Грешка при запис:\nOUT: {out_result}\nIN: {in_result}")
-
-    bot_memory.pop(user_id, None)
 
 @client.on(events.NewMessage(pattern=r'^/notes'))
 async def handle_notes(event):
