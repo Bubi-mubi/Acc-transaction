@@ -166,9 +166,9 @@ async def save_transfer(event, user_id):
     in_result = airtable.add_record(in_fields)
 
     if 'id' in out_result and 'id' in in_result:
-        await event.respond(f"✅ Записите са добавени успешно:
-❌ {sender_label}
-✅ {receiver_label}")
+        await event.respond(
+    f"✅ Записите са добавени успешно:\n❌ {sender_label}\n✅ {receiver_label}"
+        )
         user_last_records[user_id] = [out_result['id'], in_result['id']]
     else:
         await event.respond(f"⚠️ Грешка при запис:\nOUT: {out_result}\nIN: {in_result}")
