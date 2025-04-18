@@ -1,5 +1,5 @@
 from telethon import TelegramClient, events
-from airtable_client import AirtableClient, find_matching_account
+from airtable_client import AirtableClient
 from dotenv import load_dotenv
 from telethon.tl.custom import Button
 import os
@@ -120,7 +120,6 @@ async def smart_input_handler(event):
     
 # 👆 Обработка на избрания тип плащане
 @client.on(events.CallbackQuery)
-@client.on(events.CallbackQuery)
 async def button_handler(event):
     user_id = event.sender_id
     if user_id not in bot_memory:
@@ -135,8 +134,17 @@ async def button_handler(event):
 
     # Взимаме акаунтите от Airtable
     linked_accounts = airtable.get_linked_accounts()
-    sender_id = find_matching_account(payment['sender'], linked_accounts)
-    receiver_id = find_matching_account(payment['receiver'], linked_accounts)
+    print("🔁 Търся по ключови думи:")
+    print("🔍 Sender:", payment["sender"])
+    print("🔍 Receiver:", payment["receiver"])
+    print("📦 Linked accounts:")
+    for norm, (full, id_) in linked_accounts.items():
+        print(f"➡️ {norm} → {full} ({id_})")
+
+    # 🔍 Търсим акаунти чрез метода от класа AirtableClient
+    sender_id = airtable.find_matching_account(payment['sender'], linked_accounts)
+    receiver_id = airtable.find_matching_account(payment['receiver'], linked_accounts)
+
 
     if not sender_id or not receiver_id:
         await event.edit("⚠️ Не можах да открия и двете страни в акаунтите.")
