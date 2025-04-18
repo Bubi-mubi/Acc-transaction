@@ -120,6 +120,7 @@ async def smart_input_handler(event):
     
 # 👆 Обработка на избрания тип плащане
 @client.on(events.CallbackQuery)
+@client.on(events.CallbackQuery)
 async def button_handler(event):
     user_id = event.sender_id
     if user_id not in bot_memory:
@@ -130,22 +131,44 @@ async def button_handler(event):
     payment = bot_memory.pop(user_id)
 
     # 🗂️ Генерираме името на колоната според валутата
-    col_base = f"{action} {payment['currency']}"  # напр. INCOME £ или OUTCOME BGN
+    col_base = f"{action} {payment['currency']}"  # напр. INCOME BGN
 
-    fields = {
+    # Взимаме акаунтите от Airtable
+    linked_accounts = airtable.get_linked_accounts()
+    sender_id = find_matching_account(payment['sender'], linked_accounts)
+    receiver_id = find_matching_account(payment['receiver'], linked_accounts)
+
+    if not sender_id or not receiver_id:
+        await event.edit("⚠️ Не можах да открия и двете страни в акаунтите.")
+        return
+
+    # ❌ OUT запис (от sender)
+    out_fields = {
         "DATE": payment["date"],
-        "БАНКА/БУКИ": [],  # Можем по-късно да добавим auto match
-        col_base: payment["amount"],
+        "БАНКА/БУКИ": [sender_id],
+        col_base: -abs(payment["amount"]),  # винаги отрицателно
         "STATUS": "Pending",
         "ЧИИ ПАРИ": "ФИРМА",
         "NOTES": f"{payment['sender']} ➡️ {payment['receiver']}"
     }
 
-    result = airtable.add_record(fields)
-    if 'id' in result:
-        await event.edit("✅ Записът беше добавен в Airtable успешно!")
-    else:
-        await event.edit(f"⚠️ Грешка при запис:\n{result}")
+    # ✅ IN запис (в receiver)
+    in_fields = {
+        "DATE": payment["date"],
+        "БАНКА/БУКИ": [receiver_id],
+        col_base: abs(payment["amount"]),  # винаги положително
+        "STATUS": "Pending",
+        "ЧИИ ПАРИ": "ФИРМА",
+        "NOTES": f"{payment['sender']} ➡️ {payment['receiver']}"
+    }
 
+    # Записваме и двата реда
+    out_result = airtable.add_record(out_fields)
+    in_result = airtable.add_record(in_fields)
+
+    if 'id' in out_result and 'id' in in_result:
+        await event.edit("✅ Два записа бяха добавени: изходящ и входящ трансфер!")
+    else:
+        await event.edit(f"⚠️ Грешка при запис:\nOUT: {out_result}\nIN: {in_result}")
 
 client.run_until_disconnected()
