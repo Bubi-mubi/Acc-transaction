@@ -152,7 +152,7 @@ async def save_transfer(event, user_id):
 
     fields_common = {
         "DATE": data["date"],
-        "STATUS": [status_record_id],  # това вече е истински record ID
+        "STATUS": [status_id],  # това вече е истински record ID
         "ЧИИ ПАРИ": "",
         "NOTES": ""
     }
