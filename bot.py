@@ -128,6 +128,13 @@ async def button_handler(event):
     col_base = f"{action} {payment['currency'].upper()}"
     linked_accounts = airtable.get_linked_accounts()
 
+    # 🔽 Вземаме пълното име на потребителя
+    sender = await event.get_sender()
+    entered_by = f"{sender.first_name or ''} {sender.last_name or ''}".strip()
+    if not entered_by:
+        entered_by = str(sender.id)  # fallback
+
+
     sender_id = receiver_id = None
     sender_label = receiver_label = ""
 
@@ -150,6 +157,7 @@ async def button_handler(event):
         "STATUS": "Pending",
         "ЧИИ ПАРИ": "ФИРМА",
         "NOTES": f"{sender_label} ➡️ {receiver_label}"
+        "Въвел транзакцията": entered_by
     }
 
     in_fields = {
@@ -159,6 +167,7 @@ async def button_handler(event):
         "STATUS": "Pending",
         "ЧИИ ПАРИ": "ФИРМА",
         "NOTES": f"{sender_label} ➡️ {receiver_label}"
+        "Въвел транзакцията": entered_by
     }
 
     out_result = airtable.add_record(out_fields)
