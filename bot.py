@@ -110,9 +110,10 @@ async def button_handler(event):
 
         await event.edit("🟡 Какъв е статусът на трансакцията?",
         buttons=[
-            [Button.inline("🟡 Pending", f"status|Pending|{user_id}".encode())],
-            [Button.inline("🔴 Blocked", f"status|Blocked|{user_id}".encode())],
-            [Button.inline("🟢 Arrived", f"status|Arrived|{user_id}".encode())]
+            [Button.inline("🟡 Pending", f"status|🟡 Pending|{user_id}".encode())],
+            [Button.inline("🔴 Blocked", f"status|🔴 Blocked|{user_id}".encode())],
+            [Button.inline("🟢 Arrived", f"status|🟢 Arrived|{user_id}".encode())]
+
     ])
 
         return
@@ -151,12 +152,7 @@ async def save_transfer(event, user_id):
         return
 
     # 🔒 Проверка дали статусът е валиден
-    valid_statuses = ["Pending", "Blocked", "Arrived"]
-    status = data.get("status", "").title()
-
-    if status not in valid_statuses:
-        await event.respond(f"⚠️ Невалиден статус: `{status}`.\nТой трябва да е един от: {', '.join(valid_statuses)}")
-        return
+        status = data.get("status", "")
 
     fields_common = {
         "DATE": data["date"],
