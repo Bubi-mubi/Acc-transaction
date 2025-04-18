@@ -1,3 +1,4 @@
+
 from telethon import TelegramClient, events
 from airtable_client import AirtableClient
 from dotenv import load_dotenv
@@ -42,7 +43,6 @@ bot_token = os.getenv("BOT_TOKEN")
 client = TelegramClient('bot_session', api_id, api_hash).start(bot_token=bot_token)
 airtable = AirtableClient()
 
-# 💬 Начално съобщение
 @client.on(events.NewMessage)
 async def smart_input_handler(event):
     if event.raw_text.startswith("/notes"):
@@ -76,8 +76,9 @@ async def smart_input_handler(event):
         "date": event.message.date.date().isoformat()
     }
 
-    await event.respond(
-        f"📌 Разпознах: {amount} {currency_key} от *{sender}* към *{receiver}*.\nКакъв е видът на плащането?",
+    await event.reply(
+        f"📌 Разпознах: {amount} {currency_key} от *{sender}* към *{receiver}*.
+Какъв е видът на плащането?",
         buttons=[
             [Button.inline("INCOME", f"income|{user_id}".encode()),
              Button.inline("OUTCOME", f"outcome|{user_id}".encode())],
@@ -86,7 +87,6 @@ async def smart_input_handler(event):
         ]
     )
 
-# 🟡 Обработка на бутони
 @client.on(events.CallbackQuery)
 async def button_handler(event):
     data = event.data.decode("utf-8")
@@ -115,22 +115,14 @@ async def button_handler(event):
 
     if action == "status":
         status_label = parts[1].strip()
-
-        status_dict = airtable.get_status_records()
-        if status_label not in status_dict:
-            await event.respond(f"⚠️ Статусът {status_label} не съществува в таблицата STATUS.")
-            return
-
-        bot_memory[user_id]["status_id"] = status_dict[status_label]
-        bot_memory[user_id]["status_label"] = status_label
-
+        bot_memory[user_id]["status"] = status_label
         await save_transfer(event, user_id)
 
-# ✅ Запис в Airtable
 async def save_transfer(event, user_id):
     data = bot_memory.get(user_id)
     col_base = f"{data['action']} {data['currency']}".upper()
     linked_accounts = airtable.get_linked_accounts()
+    status_options = airtable.get_status_options()
 
     sender_id = receiver_id = None
     sender_label = receiver_label = ""
@@ -147,9 +139,14 @@ async def save_transfer(event, user_id):
         await event.respond("⚠️ Не можах да открия и двете страни в акаунтите.")
         return
 
+    status_id = status_options.get(data["status"])
+    if not status_id:
+        await event.respond(f"⚠️ Статусът {data['status']} не съществува в таблицата STATUS.")
+        return
+
     fields_common = {
         "DATE": data["date"],
-        "STATUS": [data["status_id"]],
+        "STATUS": [status_id],
         "ЧИИ ПАРИ": "",
         "NOTES": ""
     }
@@ -170,14 +167,15 @@ async def save_transfer(event, user_id):
     in_result = airtable.add_record(in_fields)
 
     if 'id' in out_result and 'id' in in_result:
-        await event.respond(f"✅ Записите са добавени успешно:\n❌ {sender_label}\n✅ {receiver_label}")
+        await event.respond(f"✅ Записите са добавени успешно:
+❌ {sender_label}
+✅ {receiver_label}")
         user_last_records[user_id] = [out_result['id'], in_result['id']]
     else:
         await event.respond(f"⚠️ Грешка при запис:\nOUT: {out_result}\nIN: {in_result}")
 
     bot_memory.pop(user_id, None)
 
-# 📝 /notes команда
 @client.on(events.NewMessage(pattern=r'^/notes'))
 async def handle_notes(event):
     user_id = str(event.sender_id)
