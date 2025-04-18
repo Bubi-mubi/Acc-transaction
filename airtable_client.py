@@ -38,16 +38,20 @@ class AirtableClient:
         return mapping
 
     def find_matching_account(self, user_input, account_dict=None):
-        if account_dict is None:
-            account_dict = self.get_linked_accounts()
+    if account_dict is None:
+        account_dict = self.get_linked_accounts()
 
-        input_keywords = normalize(user_input).split()
+    input_keywords = normalize(user_input).split()
+    print(f"\n🔍 Търсим за: '{user_input}' → ключови думи: {input_keywords}\n")
 
-        for normalized_name, (original, record_id) in account_dict.items():
-            if all(keyword in normalized_name for keyword in input_keywords):
-                return record_id  # ✔ намерено
+    for normalized_name, (original, record_id) in account_dict.items():
+        print(f"🔎 Сравняваме с: {normalized_name}")
+        if all(keyword in normalized_name for keyword in input_keywords):
+            print(f"✅ НАМЕРЕНО: {original} (ID: {record_id})")
+            return record_id
 
-        return None  # ❌ не е намерено
+    print("❌ Нищо не съвпадна.")
+    return None
 
     def add_record(self, fields: dict):
         data = {
