@@ -150,6 +150,22 @@ async def save_transfer(event, user_id):
 
     status_record_id = status_options[status_name]
 
+    # 🧠 Вземаме Record ID от таблицата STATUS
+    status_text = data.get("status", "")
+    status_id = None
+
+    # Извличаме всички статуси от таблицата STATUS
+    status_table = airtable.get_table("STATUS")
+    for record in status_table:
+        if record["fields"].get("STAT") == status_text:
+            status_id = record["id"]
+            break
+
+    # Ако не е намерен, информираме потребителя
+    if not status_id:
+        await event.respond(f"⚠️ Статусът {status_text} не съществува в таблицата STATUS.")
+        return
+
     fields_common = {
         "DATE": data["date"],
         "STATUS": [status_id],  # това вече е истински record ID
