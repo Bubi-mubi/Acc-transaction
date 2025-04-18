@@ -1,6 +1,9 @@
 import os
 import requests
 import difflib
+from dotenv import load_dotenv
+
+load_dotenv()
 
 def normalize(text):
     return (
@@ -15,31 +18,27 @@ def normalize(text):
 
 class AirtableClient:
     def __init__(self):
-        from dotenv import load_dotenv
-        load_dotenv()
         self.token = os.getenv("AIRTABLE_PAT")
         self.base_id = os.getenv("AIRTABLE_BASE_ID")
-        self.table_name = os.getenv("AIRTABLE_TABLE", "Acc Transaction")
-
-        self.endpoint = f"https://api.airtable.com/v0/{self.base_id}/{self.table_name}"
         self.headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json"
         }
 
-    def add_record(self, fields: dict):
+    def add_record_to_table(self, table_name, fields: dict):
+        url = f"https://api.airtable.com/v0/{self.base_id}/{table_name}"
         data = {"fields": fields}
-        response = requests.post(self.endpoint, headers=self.headers, json=data)
+        response = requests.post(url, headers=self.headers, json=data)
         return response.json()
 
-    def update_record(self, record_id: str, fields: dict):
-        url = f"{self.endpoint}/{record_id}"
+    def update_record_in_table(self, table_name, record_id: str, fields: dict):
+        url = f"https://api.airtable.com/v0/{self.base_id}/{table_name}/{record_id}"
         data = {"fields": fields}
         response = requests.patch(url, headers=self.headers, json=data)
         return response.json()
 
-    def get_linked_accounts(self):
-        url = f"https://api.airtable.com/v0/{self.base_id}/ВСИЧКИ%20АКАУНТИ"
+    def get_linked_accounts_from_table(self, table_name):
+        url = f"https://api.airtable.com/v0/{self.base_id}/{table_name}"
         mapping = {}
         offset = None
 
