@@ -130,6 +130,7 @@ async def save_transfer(event, user_id):
     sender_id = receiver_id = None
     sender_label = receiver_label = ""
 
+    # Нормализиране и търсене на акаунти
     for norm, (label, record_id) in linked_accounts.items():
         if all(kw in norm for kw in normalize(data['sender']).split()):
             sender_id = record_id
@@ -142,9 +143,17 @@ async def save_transfer(event, user_id):
         await event.respond("⚠️ Не можах да открия и двете страни в акаунтите.")
         return
 
+    # 🔒 Проверка дали статусът е валиден
+    valid_statuses = ["Pending", "Blocked", "Arrived"]
+    status = data.get("status", "").title()
+
+    if status not in valid_statuses:
+        await event.respond(f"⚠️ Невалиден статус: `{status}`.\nТой трябва да е един от: {', '.join(valid_statuses)}")
+        return
+
     fields_common = {
         "DATE": data["date"],
-        "STATUS": data["status"].title(),  # превръща "pending" → "Pending"
+        "STATUS": status,
         "ЧИИ ПАРИ": "",
         "NOTES": ""
     }
@@ -165,7 +174,7 @@ async def save_transfer(event, user_id):
     in_result = airtable.add_record(in_fields)
 
     if 'id' in out_result and 'id' in in_result:
-        await event.respond(f"✅ Записите са добавени:\n❌ {sender_label}\n✅ {receiver_label}")
+        await event.respond(f"✅ Записите са добавени успешно:\n❌ {sender_label}\n✅ {receiver_label}")
         user_last_records[user_id] = [out_result['id'], in_result['id']]
     else:
         await event.respond(f"⚠️ Грешка при запис:\nOUT: {out_result}\nIN: {in_result}")
