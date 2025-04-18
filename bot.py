@@ -119,6 +119,7 @@ async def button_handler(event):
 
     if action == "status":
         if len(parts) < 3 or not parts[1].strip():
+            print(f"🚀 Записваме трансакцията за user {user_id} със статус: {status}")
             await event.respond("⚠️ Статусът е празен или невалиден.")
             return
 
