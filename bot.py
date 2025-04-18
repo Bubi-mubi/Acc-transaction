@@ -140,10 +140,11 @@ async def save_transfer(event, user_id):
 
     fields_common = {
         "DATE": data["date"],
-        "STATUS": status,
+        "ТРАНЗАКЦИЯ СТАТУС": status,  # новото име на колоната
         "ЧИИ ПАРИ": "",
         "NOTES": ""
     }
+
 
     out_fields = {
         **fields_common,
