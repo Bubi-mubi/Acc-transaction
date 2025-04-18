@@ -146,9 +146,16 @@ async def button_handler(event):
         print(f"- {norm}  →  {original}")
 
     # 🔍 Търсим акаунти чрез метода от класа AirtableClient
-    sender_id = airtable.find_matching_account(payment['sender'], linked_accounts)
-    receiver_id = airtable.find_matching_account(payment['receiver'], linked_accounts)
+    sender_id = receiver_id = None
+    sender_label = receiver_label = ""
 
+    for norm, (label, record_id) in linked_accounts.items():
+        if all(kw in norm for kw in normalize(payment['sender']).split()):
+            sender_id = record_id
+            sender_label = label
+        if all(kw in norm for kw in normalize(payment['receiver']).split()):
+            receiver_id = record_id
+            receiver_label = label
 
     if not sender_id or not receiver_id:
         await event.edit("⚠️ Не можах да открия и двете страни в акаунтите.")
@@ -161,17 +168,17 @@ async def button_handler(event):
         col_base: -abs(payment["amount"]),  # винаги отрицателно
         "STATUS": "Pending",
         "ЧИИ ПАРИ": "ФИРМА",
-        "NOTES": f"{payment['sender']} ➡️ {payment['receiver']}"
+        "NOTES": f"{sender_label} ➡️ {receiver_label}"
     }
 
     # ✅ IN запис (в receiver)
     in_fields = {
         "DATE": payment["date"],
         "БАНКА/БУКИ": [receiver_id],
-        col_base: abs(payment["amount"]),  # винаги положително
+        col_base: abs(payment["amount"]),
         "STATUS": "Pending",
         "ЧИИ ПАРИ": "ФИРМА",
-        "NOTES": f"{payment['sender']} ➡️ {payment['receiver']}"
+        "NOTES": f"{sender_label} ➡️ {receiver_label}"
     }
 
     # Записваме и двата реда
@@ -179,7 +186,9 @@ async def button_handler(event):
     in_result = airtable.add_record(in_fields)
 
     if 'id' in out_result and 'id' in in_result:
-        await event.edit("✅ Два записа бяха добавени: изходящ и входящ трансфер!")
+       await event.edit(
+    f"✅ Два записа бяха добавени успешно:\n\n❌ - {sender_label}\n✅ + {receiver_label}"
+)
     else:
         await event.edit(f"⚠️ Грешка при запис:\nOUT: {out_result}\nIN: {in_result}")
 
