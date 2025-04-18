@@ -211,5 +211,58 @@ async def notes_command_handler(event):
     bot_memory[user_id]['awaiting_note'] = True
     await event.respond("📝 Каква бележка искаш да добавим към последните два записа?")
 
+    from telethon.tl.custom import Button
+    from datetime import datetime, timedelta
+
+    @client.on(events.NewMessage(pattern="/delete"))
+    async def delete_with_buttons(event):
+        user_id = event.sender_id
+        username = event.sender.username or str(user_id)
+
+        recent_records = airtable.get_recent_user_records(username)
+        if not recent_records:
+            await event.respond("ℹ️ Няма записи от последните 60 минути.")
+            return
+
+        # Записваме целите записи временно
+        bot_memory[user_id] = {
+            "deletable_records": recent_records
+        }
+
+        message = "🗂️ Последни записи:\n\n"
+        buttons = []
+
+        for i, rec in enumerate(recent_records, start=1):
+            date = rec["fields"].get("DATE", "—")
+            amount = next((v for k, v in rec["fields"].items() if isinstance(v, (int, float))), "—")
+            note = rec["fields"].get("NOTES", "—")
+            message += f"{i}. 💸 {amount} | 📅 {date} | 📝 {note}\n"
+            buttons.append(Button.inline(f"❌ Изтрий {i}", f"delete_{i}".encode()))
+
+        await event.respond(message + "\n👇 Избери кой да изтрием:", buttons=buttons)
+
+
+    @client.on(events.CallbackQuery(pattern=b"delete_([0-9]+)"))
+    async def handle_delete_button(event):
+        user_id = event.sender_id
+        index = int(event.pattern_match.group(1)) - 1
+
+        records = bot_memory.get(user_id, {}).get("deletable_records", [])
+        if index < 0 or index >= len(records):
+            await event.answer("❌ Невалиден запис.", alert=True)
+            return
+
+        record = records[index]
+        record_id = record["id"]
+        note = record["fields"].get("NOTES", "—")
+
+        success = airtable.delete_record(record_id)
+        if success:
+            await event.edit(f"🗑️ Записът „{note}“ беше изтрит успешно.")
+        else:
+            await event.edit("⚠️ Възникна грешка при изтриването.")
+
+        # Почисти временната памет
+        bot_memory[user_id]["deletable_records"] = []
 
 client.run_until_disconnected()
