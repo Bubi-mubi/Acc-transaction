@@ -144,7 +144,7 @@ async def save_transfer(event, user_id):
 
     fields_common = {
         "DATE": data["date"],
-        "STATUS": data["status"].title()  # превръща "pending" → "Pending"
+        "STATUS": data["status"].title(),  # превръща "pending" → "Pending"
         "ЧИИ ПАРИ": "",
         "NOTES": ""
     }
