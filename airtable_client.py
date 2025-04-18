@@ -1,5 +1,6 @@
 import os
 import requests
+import difflib
 
 def normalize(text):
     return (
@@ -41,16 +42,19 @@ class AirtableClient:
     if account_dict is None:
         account_dict = self.get_linked_accounts()
 
-    input_keywords = normalize(user_input).split()
-    print(f"\n🔍 Търсим за: '{user_input}' → ключови думи: {input_keywords}\n")
+    user_input_norm = normalize(user_input)
+    print(f"\n🔍 Търсим fuzzy: '{user_input}' → '{user_input_norm}'")
 
-    for normalized_name, (original, record_id) in account_dict.items():
-        print(f"🔎 Сравняваме с: {normalized_name}")
-        if all(keyword in normalized_name for keyword in input_keywords):
-            print(f"✅ НАМЕРЕНО: {original} (ID: {record_id})")
-            return record_id
+    possible_matches = list(account_dict.keys())
+    best = difflib.get_close_matches(user_input_norm, possible_matches, n=1, cutoff=0.5)
 
-    print("❌ Нищо не съвпадна.")
+    if best:
+        matched_key = best[0]
+        original, record_id = account_dict[matched_key]
+        print(f"✅ Най-близък fuzzy match: {original} ({record_id})")
+        return record_id
+
+    print("❌ Няма близко съвпадение.")
     return None
 
     def add_record(self, fields: dict):
