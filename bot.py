@@ -181,3 +181,6 @@ async def save_transfer(event, user_id):
         await event.respond(f"⚠️ Грешка при запис:\nOUT: {out_result}\nIN: {in_result}")
 
     bot_memory.pop(user_id, None)
+
+client.run_until_disconnected()
+
