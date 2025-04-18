@@ -77,8 +77,15 @@ async def smart_input_handler(event):
     }
 
     await event.reply(
-        f"📌 Разпознах: {amount} {currency_key} от *{sender}* към *{receiver}*.
-Какъв е видът на плащането?",
+        f"📌 Разпознах: {amount} {currency_key} от *{sender}* към *{receiver}*.\nКакъв е видът на плащането?",
+        buttons=[
+        [Button.inline("INCOME", f"income|{user_id}".encode()),
+         Button.inline("OUTCOME", f"outcome|{user_id}".encode())],
+        [Button.inline("DEPOSIT", f"deposit|{user_id}".encode()),
+         Button.inline("WITHDRAW", f"withdraw|{user_id}".encode())]
+    ]
+)
+
         buttons=[
             [Button.inline("INCOME", f"income|{user_id}".encode()),
              Button.inline("OUTCOME", f"outcome|{user_id}".encode())],
