@@ -86,7 +86,7 @@ async def smart_input_handler(event):
 # 👆 Обработка на бутони
 @client.on(events.CallbackQuery)
 async def button_handler(event):
-    await event.answer("📨 Обработвам...")  # <-- добави това
+    await event.answer("⏳ Момент...")
 
     data = event.data.decode("utf-8")
     action, user_id = data.split("|")
@@ -96,7 +96,8 @@ async def button_handler(event):
         return
 
     payment = bot_memory.pop(user_id)
-    col_base = f"{action} {payment['currency']}"
+    action = action.upper()
+    col_base = f"{action} {payment['currency'].upper()}"
     linked_accounts = airtable.get_linked_accounts()
 
     sender_id = receiver_id = None
