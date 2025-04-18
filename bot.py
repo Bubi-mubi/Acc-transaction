@@ -161,7 +161,10 @@ async def button_handler(event):
 
     @client.on(events.CallbackQuery(pattern=b'status_(pending|arrived|blocked)'))
     async def handle_status_selection(event):
-        status_value = event.pattern_match.group(1).capitalize()
+        status_value = event.pattern_match.group(1)
+        if isinstance(status_value, bytes):
+        status_value = status_value.decode("utf-8")
+        status_value = status_value.capitalize()
         user_id = event.sender_id
 
         last_ids = bot_memory.get(user_id, {}).get('last_airtable_ids', [])
