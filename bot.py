@@ -11,6 +11,20 @@ load_dotenv()
 # Памет за временни данни от потребители
 bot_memory = {}
 
+CURRENCY_SYNONYMS = {
+    "£": ["паунд", "паунда", "paund", "paunda", "gbp", "gb"],
+    "BGN": ["лв", "лева", "lv", "lw"],
+    "EU": ["евро", "eur", "euro", "evro", "ewro"],
+    "USD": ["долар", "долара", "usd", "dolar", "dolara"]
+}
+
+def get_currency_key(word):
+    word = word.lower().strip()
+    for key, synonyms in CURRENCY_SYNONYMS.items():
+        if word in synonyms:
+            return key
+    return None
+
 api_id = int(os.getenv("API_ID"))
 api_hash = os.getenv("API_HASH")
 bot_token = os.getenv("BOT_TOKEN")
@@ -65,26 +79,22 @@ async def handler(event):
         await event.reply(f"⚠️ Грешка: {e}")
 
 # 💬 Разпознаване на изречение като: "100 паунда от X към Y"
-@client.on(events.NewMessage(pattern=r'(\d+)\s*(паунда|паунди|лв|лева|евро)\s*от\s*(.+?)\s*към\s*(.+)'))
+@client.on(events.NewMessage(pattern=r'(\d+(?:[.,]\d{1,2})?)\s*([а-яa-zА-ЯA-Z.]+)\s+от\s+(.+?)\s+(?:към|kym|kum)\s+(.+)', flags=re.IGNORECASE))
 async def smart_input_handler(event):
-    match = re.search(r'(\d+)\s*(паунда|паунди|лв|лева|евро)\s*от\s*(.+?)\s*към\s*(.+)', event.raw_text, re.IGNORECASE)
+    match = re.search(r'(\d+(?:[.,]\d{1,2})?)\s*([а-яa-zА-ЯA-Z.]+)\s+от\s+(.+?)\s+(?:към|kym|kum)\s+(.+)', event.raw_text, re.IGNORECASE)
     if not match:
         return
 
-    amount = float(match.group(1))
-    currency = match.group(2).lower()
+    amount = float(match.group(1).replace(",", "."))
+    currency_raw = match.group(2).strip()
     sender = match.group(3).strip()
     receiver = match.group(4).strip()
 
-    # 💱 Определяме валутата
-    if currency in ["паунда", "паунди"]:
-        currency_key = "£"
-    elif currency in ["лв", "лева"]:
-        currency_key = "BGN"
-    elif currency == "евро":
-        currency_key = "EU"
-    else:
-        currency_key = "£"  # fallback
+    currency_key = get_currency_key(currency_raw)
+
+    if not currency_key:
+        await event.reply("❌ Не мога да разбера валутата. Моля, използвай: лв, lv, паунд, eur, долар и т.н.")
+        return
 
     user_id = event.sender_id
     bot_memory[user_id] = {
@@ -96,7 +106,7 @@ async def smart_input_handler(event):
     }
 
     await event.respond(
-        f"📌 Разпознах: {amount} {currency.upper()} от *{sender}* към *{receiver}*.\nКакъв е видът на плащането?",
+        f"📌 Разпознах: {amount} {currency_key} от *{sender}* към *{receiver}*.\nКакъв е видът на плащането?",
         buttons=[
             [Button.inline("INCOME", b"income"), Button.inline("OUTCOME", b"outcome")],
             [Button.inline("DEPOSIT", b"deposit"), Button.inline("WITHDRAW", b"withdraw")]
