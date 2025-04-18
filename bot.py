@@ -140,13 +140,23 @@ async def save_transfer(event, user_id):
         await event.respond("⚠️ Не можах да открия и двете страни в акаунтите.")
         return
     status = data["status"]
-    
+
+    status_name = data.get("status", "").strip()
+    status_options = airtable.get_status_options()
+
+    if status_name not in status_options:
+        await event.respond(f"⚠️ Статусът `{status_name}` не съществува в таблицата STATUS.")
+        return
+
+    status_record_id = status_options[status_name]
+
     fields_common = {
         "DATE": data["date"],
-        "STATUS": [data["status"]],  # Link to STATUS table
+        "STATUS": [status_record_id],  # това вече е истински record ID
         "ЧИИ ПАРИ": "",
         "NOTES": ""
     }
+
 
     out_fields = {
         **fields_common,
