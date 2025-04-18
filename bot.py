@@ -42,7 +42,7 @@ bot_token = os.getenv("BOT_TOKEN")
 client = TelegramClient('bot_session', api_id, api_hash).start(bot_token=bot_token)
 airtable = AirtableClient()
 
-# 💬 Начално съобщение
+# 💬 Старт на нов запис
 @client.on(events.NewMessage)
 async def smart_input_handler(event):
     if event.raw_text.startswith("/notes"):
@@ -76,7 +76,6 @@ async def smart_input_handler(event):
         "date": event.message.date.date().isoformat()
     }
 
-
     await event.reply(
         f"📌 Разпознах: {amount} {currency_key} от *{sender}* към *{receiver}*.\nКакъв е видът на плащането?",
         buttons=[
@@ -87,11 +86,11 @@ async def smart_input_handler(event):
         ]
     )
 
-# 🟡 Обработка на бутони
+# 🟡 Бутони: тип трансакция → статус → запис
 @client.on(events.CallbackQuery)
 async def button_handler(event):
     data = event.data.decode("utf-8")
-    print("▶️ Callback data:", event.data)
+    print("▶️ Callback data:", data)
     parts = data.split("|")
 
     if len(parts) < 2:
@@ -107,38 +106,28 @@ async def button_handler(event):
 
     if len(parts) == 2:
         bot_memory[user_id]["action"] = action.upper()
-
         await event.edit("🟡 Какъв е статусът на трансакцията?",
-        buttons=[
-            [Button.inline("🟡 Pending", f"status|🟡 Pending|{user_id}".encode())],
-            [Button.inline("🔴 Blocked", f"status|🔴 Blocked|{user_id}".encode())],
-            [Button.inline("🟢 Arrived", f"status|🟢 Arrived|{user_id}".encode())]
-
-    ])
-
+            buttons=[
+                [Button.inline("🟡 Pending", f"status|🟡 Pending|{user_id}".encode())],
+                [Button.inline("🔴 Blocked", f"status|🔴 Blocked|{user_id}".encode())],
+                [Button.inline("🟢 Arrived", f"status|🟢 Arrived|{user_id}".encode())]
+            ])
         return
 
     if action == "status":
-        if len(parts) < 3 or not parts[1].strip():
-            print(f"🚀 Записваме трансакцията за user {user_id} със статус: {status}")
-            await event.respond("⚠️ Статусът е празен или невалиден.")
-            return
-
-        status = parts[1].strip().title()
+        status = parts[1].strip()
         bot_memory[user_id]["status"] = status
         await save_transfer(event, user_id)
 
-
 # ✅ Запис в Airtable
 async def save_transfer(event, user_id):
-    data = bot_memory.pop(user_id)
+    data = bot_memory.get(user_id)
     col_base = f"{data['action']} {data['currency']}".upper()
     linked_accounts = airtable.get_linked_accounts()
 
     sender_id = receiver_id = None
     sender_label = receiver_label = ""
 
-    # Нормализиране и търсене на акаунти
     for norm, (label, record_id) in linked_accounts.items():
         if all(kw in norm for kw in normalize(data['sender']).split()):
             sender_id = record_id
@@ -151,12 +140,9 @@ async def save_transfer(event, user_id):
         await event.respond("⚠️ Не можах да открия и двете страни в акаунтите.")
         return
 
-    # 🔒 Проверка дали статусът е валиден
-        status = data.get("status", "")
-
     fields_common = {
         "DATE": data["date"],
-        "STATUS": status,
+        "STATUS": data.get("status", ""),
         "ЧИИ ПАРИ": "",
         "NOTES": ""
     }
@@ -182,7 +168,10 @@ async def save_transfer(event, user_id):
     else:
         await event.respond(f"⚠️ Грешка при запис:\nOUT: {out_result}\nIN: {in_result}")
 
-# 📝 /notes команда
+    # 🧹 Почистваме след това
+    bot_memory.pop(user_id, None)
+
+# 📝 Добавяне на бележка
 @client.on(events.NewMessage(pattern=r'^/notes'))
 async def handle_notes(event):
     user_id = str(event.sender_id)
