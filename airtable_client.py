@@ -20,10 +20,18 @@ class AirtableClient:
     def __init__(self):
         self.token = os.getenv("AIRTABLE_PAT")
         self.base_id = os.getenv("AIRTABLE_BASE_ID")
+        self.main_table = os.getenv("AIRTABLE_TABLE_NAME", "Acc Transactions")
+
         self.headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json"
         }
+
+    def add_record(self, fields: dict):
+        return self.add_record_to_table(self.main_table, fields)
+
+    def update_record(self, record_id: str, fields: dict):
+        return self.update_record_in_table(self.main_table, record_id, fields)
 
     def add_record_to_table(self, table_name, fields: dict):
         url = f"https://api.airtable.com/v0/{self.base_id}/{table_name}"
@@ -36,6 +44,9 @@ class AirtableClient:
         data = {"fields": fields}
         response = requests.patch(url, headers=self.headers, json=data)
         return response.json()
+
+    def get_linked_accounts(self):
+        return self.get_linked_accounts_from_table("ВСИЧКИ АКАУНТИ")
 
     def get_linked_accounts_from_table(self, table_name):
         url = f"https://api.airtable.com/v0/{self.base_id}/{table_name}"
