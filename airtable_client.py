@@ -20,11 +20,11 @@ class AirtableClient:
         self.table_name = os.getenv("AIRTABLE_TABLE_NAME")
         self.endpoint = f"https://api.airtable.com/v0/{self.base_id}/{self.table_name}"
         self.base_url = f"https://api.airtable.com/v0/{self.base_id}"
-        self.cached_accounts = None
         self.headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json"
         }
+        self.cached_accounts = None  # Кеширан списък с акаунти
 
     def update_notes(self, record_id, note):
         url = f"{self.base_url}/{self.table_name}/{record_id}"
@@ -35,7 +35,6 @@ class AirtableClient:
         }
 
         response = requests.patch(url, json=data, headers=self.headers, params={"typecast": "true"})
-
         print(f"📝 Обновен NOTES за {record_id}: {response.status_code} – {response.text}")
 
         if response.status_code != 200:
@@ -55,9 +54,9 @@ class AirtableClient:
                 full_url += f"?offset={offset}"
 
             response = requests.get(full_url, headers=self.headers)
-        data = response.json()
+            data = response.json()
 
-        for record in data.get("records", []):
+            for record in data.get("records", []):
                 full_name = record["fields"].get("REG")
                 if full_name:
                     normalized = normalize(full_name)
@@ -69,8 +68,6 @@ class AirtableClient:
 
         self.cached_accounts = mapping
         return mapping
-
-
 
     def find_matching_account(self, user_input, account_dict=None):
         if account_dict is None:
@@ -112,5 +109,3 @@ class AirtableClient:
 
         if response.status_code != 200:
             print(f"❌ Грешка при обновяване на {record_id}: {response.text}")
-
-
