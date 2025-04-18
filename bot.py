@@ -143,7 +143,7 @@ async def save_transfer(event, user_id):
     
     fields_common = {
         "DATE": data["date"],
-        "STATUS NEW": status,
+        "STAT": [status],
         "ЧИИ ПАРИ": "",
         "NOTES": ""
     }
