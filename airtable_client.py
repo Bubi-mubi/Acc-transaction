@@ -19,6 +19,7 @@ class AirtableClient:
         self.base_id = os.getenv("AIRTABLE_BASE_ID")
         self.table_name = os.getenv("AIRTABLE_TABLE_NAME")
         self.endpoint = f"https://api.airtable.com/v0/{self.base_id}/{self.table_name}"
+        self.base_url = f"https://api.airtable.com/v0/{self.base_id}"
         self.headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json"
