@@ -23,10 +23,10 @@ def normalize(text):
     )
 
 CURRENCY_SYNONYMS = {
-    "£": ["паунд", "паунда", "paund", "paunda", "gbp", "gb"],
-    "BGN": ["лв", "лева", "lv", "lw"],
-    "EU": ["евро", "eur", "euro", "evro", "ewro"],
-    "USD": ["долар", "долара", "usd", "dolar", "dolara"]
+    "£": ["паунд", "паунда", "paund", "paunda", "gbp", "GBP" "gb"],
+    "BGN": ["лв", "лева", "lv", "lw", "BGN", "bgn"],
+    "EU": ["евро", "eur", "euro", "evro", "ewro", "EURO"],
+    "USD": ["долар", "долара", "usd", "dolar", "dolara", "USD"]
 }
 
 def get_currency_key(word):
@@ -42,6 +42,7 @@ bot_token = os.getenv("BOT_TOKEN")
 
 client = TelegramClient('bot_session', api_id, api_hash).start(bot_token=bot_token)
 airtable = AirtableClient()
+airtable.get_linked_accounts()  # 🔄 предварително зареждане и кеширане на акаунти
 
 
 @client.on(events.NewMessage)
