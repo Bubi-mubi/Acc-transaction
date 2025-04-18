@@ -19,7 +19,7 @@ class AirtableClient:
         load_dotenv()
         self.token = os.getenv("AIRTABLE_PAT")
         self.base_id = os.getenv("AIRTABLE_BASE_ID")
-        self.table_name = os.getenv("AIRTABLE_TABLE", "AccTransaction")
+        self.table_name = os.getenv("AIRTABLE_TABLE", "Acc Transaction")
 
         self.endpoint = f"https://api.airtable.com/v0/{self.base_id}/{self.table_name}"
         self.headers = {
