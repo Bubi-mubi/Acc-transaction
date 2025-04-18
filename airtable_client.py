@@ -1,5 +1,7 @@
 import os
 import requests
+import difflib  # за fuzzy
+# 👆 Увери се, че го има най-горе!
 
 def normalize(text):
     return (
@@ -34,24 +36,28 @@ class AirtableClient:
             if full_name:
                 normalized = normalize(full_name)
                 mapping[normalized] = (full_name, record["id"])
-
         return mapping
 
     def find_matching_account(self, user_input, account_dict=None):
         if account_dict is None:
             account_dict = self.get_linked_accounts()
 
-        input_keywords = normalize(user_input).split()
+        user_input_norm = normalize(user_input)
+        print(f"\n🔍 Търсим fuzzy: '{user_input}' → '{user_input_norm}'")
 
-        for normalized_name, (original, record_id) in account_dict.items():
-            if all(keyword in normalized_name for keyword in input_keywords):
-                return record_id  # ✔ намерено
+        possible_matches = list(account_dict.keys())
+        best = difflib.get_close_matches(user_input_norm, possible_matches, n=1, cutoff=0.5)
 
-        return None  # ❌ не е намерено
+        if best:
+            matched_key = best[0]
+            original, record_id = account_dict[matched_key]
+            print(f"✅ Най-близък fuzzy match: {original} ({record_id})")
+            return record_id
+
+        print("❌ Няма близко съвпадение.")
+        return None
 
     def add_record(self, fields: dict):
-        data = {
-            "fields": fields
-        }
+        data = {"fields": fields}
         response = requests.post(self.endpoint, headers=self.headers, json=data)
         return response.json()
