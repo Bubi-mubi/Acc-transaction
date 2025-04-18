@@ -1,6 +1,7 @@
 import os
 import requests
 import difflib
+from dotenv import load_dotenv
 
 def normalize(text):
     return (
@@ -15,24 +16,27 @@ def normalize(text):
 
 class AirtableClient:
     def __init__(self):
+        load_dotenv()
         self.token = os.getenv("AIRTABLE_PAT")
         self.base_id = os.getenv("AIRTABLE_BASE_ID")
-        self.table_name = os.getenv("AIRTABLE_TABLE_NAME")
+        self.table_name = os.getenv("AIRTABLE_TABLE", "AccTransactions")
+
         self.endpoint = f"https://api.airtable.com/v0/{self.base_id}/{self.table_name}"
         self.headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json"
         }
 
+    def get_table(self, table_name):
+        url = f"https://api.airtable.com/v0/{self.base_id}/{table_name}"
+        response = requests.get(url, headers=self.headers)
+        return response.json().get("records", [])
+
     def get_status_options(self):
         url = f"https://api.airtable.com/v0/{self.base_id}/STATUS"
-        headers = {
-            "Authorization": f"Bearer {self.token}"
-        }
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=self.headers)
         records = response.json().get("records", [])
         return {record["fields"]["STAT"]: record["id"] for record in records if "STAT" in record["fields"]}
-
 
     def get_linked_accounts(self):
         url = f"https://api.airtable.com/v0/{self.base_id}/ВСИЧКИ%20АКАУНТИ"
@@ -59,26 +63,13 @@ class AirtableClient:
 
         return mapping
 
-    def find_matching_account(self, user_input, account_dict=None):
-        if account_dict is None:
-            account_dict = self.get_linked_accounts()
-
-        user_input_norm = normalize(user_input)
-        print(f"\n🔍 Търсим fuzzy: '{user_input}' → '{user_input_norm}'")
-
-        possible_matches = list(account_dict.keys())
-        best = difflib.get_close_matches(user_input_norm, possible_matches, n=1, cutoff=0.5)
-
-        if best:
-            matched_key = best[0]
-            original, record_id = account_dict[matched_key]
-            print(f"✅ Най-близък fuzzy match: {original} ({record_id})")
-            return record_id
-
-        print("❌ Няма близко съвпадение.")
-        return None
-
     def add_record(self, fields: dict):
         data = {"fields": fields}
         response = requests.post(self.endpoint, headers=self.headers, json=data)
+        return response.json()
+
+    def update_record(self, record_id, fields: dict):
+        url = f"{self.endpoint}/{record_id}"
+        data = {"fields": fields}
+        response = requests.patch(url, headers=self.headers, json=data)
         return response.json()
