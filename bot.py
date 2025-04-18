@@ -1,12 +1,23 @@
 from telethon import TelegramClient, events
+from dotenv import load_dotenv
 from telethon.tl.custom import Button
 from airtable_client import AirtableClient
-from dotenv import load_dotenv
 import os
 import re
 
 load_dotenv()
 
+# 📌 Централизирана конфигурация
+API_ID = int(os.getenv("API_ID"))
+API_HASH = os.getenv("API_HASH")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+AIRTABLE_PAT = os.getenv("AIRTABLE_PAT")
+AIRTABLE_BASE_ID = os.getenv("AIRTABLE_BASE_ID")
+TABLE_TRANSACTIONS = "Acc Transaction"
+
+# 🛠️ Инициализация
+client = TelegramClient("bot_session", API_ID, API_HASH).start(bot_token=BOT_TOKEN)
+airtable = AirtableClient()
 bot_memory = {}
 user_last_records = {}
 
@@ -24,7 +35,7 @@ def normalize(text):
 CURRENCY_SYNONYMS = {
     "£": ["паунд", "паунда", "paund", "paunda", "gbp", "gb"],
     "BGN": ["лв", "лева", "lv", "lw"],
-    "EU": ["евро", "eur", "euro", "evro", "ewro"],
+    "EUR": ["евро", "eur", "euro", "evro", "ewro"],
     "USD": ["долар", "долара", "usd", "dolar", "dolara"]
 }
 
@@ -35,13 +46,7 @@ def get_currency_key(word):
             return key
     return None
 
-api_id = int(os.getenv("API_ID"))
-api_hash = os.getenv("API_HASH")
-bot_token = os.getenv("BOT_TOKEN")
-
-client = TelegramClient('bot_session', api_id, api_hash).start(bot_token=bot_token)
-airtable = AirtableClient()
-
+# 💬 Обработка на ново съобщение
 @client.on(events.NewMessage)
 async def smart_input_handler(event):
     if event.raw_text.startswith("/notes"):
@@ -66,7 +71,6 @@ async def smart_input_handler(event):
         return
 
     user_id = str(event.sender_id)
-
     bot_memory[user_id] = {
         "amount": amount,
         "currency": currency_key,
@@ -75,7 +79,7 @@ async def smart_input_handler(event):
         "date": event.message.date.date().isoformat()
     }
 
-    await event.reply(
+    await event.respond(
         f"📌 Разпознах: {amount} {currency_key} от *{sender}* към *{receiver}*.\nКакъв е видът на плащането?",
         buttons=[
             [Button.inline("INCOME", f"income|{user_id}".encode()),
@@ -85,6 +89,7 @@ async def smart_input_handler(event):
         ]
     )
 
+# 🟡 Обработка на бутони
 @client.on(events.CallbackQuery)
 async def button_handler(event):
     data = event.data.decode("utf-8")
@@ -103,7 +108,7 @@ async def button_handler(event):
 
     if len(parts) == 2:
         bot_memory[user_id]["action"] = action.upper()
-        await event.edit("🟡 Какъв е статусът на трансакцията?",
+        await event.edit("📍 Избери статус:",
             buttons=[
                 [Button.inline("Pending", f"status|Pending|{user_id}".encode())],
                 [Button.inline("Blocked", f"status|Blocked|{user_id}".encode())],
@@ -112,7 +117,8 @@ async def button_handler(event):
         return
 
     if action == "status":
-        bot_memory[user_id]["status"] = parts[1]
+        status = parts[1]
+        bot_memory[user_id]["status"] = status
         await save_transfer(event, user_id)
 
 # ✅ Запис в Airtable
@@ -136,39 +142,36 @@ async def save_transfer(event, user_id):
         await event.respond("⚠️ Не можах да открия и двете страни в акаунтите.")
         return
 
-    status = data.get("status", "").strip()
-
     fields_common = {
         "DATE": data["date"],
-        "ТРАНЗАКЦИЯ СТАТУС": status,  # новото име на колоната
+        "ТРАНЗАКЦИЯ СТАТУС": data["status"],  # Single line text
         "ЧИИ ПАРИ": "",
         "NOTES": ""
     }
 
-
     out_fields = {
         **fields_common,
         "БАНКА/БУКИ": [sender_id],
-        col_base: -abs(data["amount"]),
+        col_base: -abs(data["amount"])
     }
 
     in_fields = {
         **fields_common,
         "БАНКА/БУКИ": [receiver_id],
-        col_base: abs(data["amount"]),
+        col_base: abs(data["amount"])
     }
 
     out_result = airtable.add_record(out_fields)
     in_result = airtable.add_record(in_fields)
 
     if 'id' in out_result and 'id' in in_result:
-        await event.respond(f"✅ Записите са добавени успешно:\n❌ {sender_label}\n✅ {receiver_label}")
-        user_last_records[user_id] = [out_result["id"], in_result["id"]]
+        await event.respond(f"✅ Записите са добавени:\n❌ {sender_label}\n✅ {receiver_label}")
+        user_last_records[user_id] = [out_result['id'], in_result['id']]
     else:
         await event.respond(f"⚠️ Грешка при запис:\nOUT: {out_result}\nIN: {in_result}")
 
-# 📝 Бележки
-@client.on(events.NewMessage(pattern=r"^/notes"))
+# 📝 Добавяне на бележка
+@client.on(events.NewMessage(pattern=r'^/notes'))
 async def handle_notes(event):
     user_id = str(event.sender_id)
     if user_id not in user_last_records:
@@ -181,9 +184,11 @@ async def handle_notes(event):
     async def capture_note(note_event):
         note = note_event.raw_text
         record_ids = user_last_records[user_id]
+
         for record_id in record_ids:
             airtable.update_record(record_id, {"NOTES": note})
-        await note_event.reply("📝 Бележката беше добавена успешно.")
+
+        await note_event.reply("📝 Бележката е записана.")
         client.remove_event_handler(capture_note)
 
 client.run_until_disconnected()
