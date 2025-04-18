@@ -171,8 +171,8 @@ async def save_transfer(event, user_id):
         col_base: abs(data["amount"]),
     }
 
-    out_result = airtable.add_record_to_table("Acc Transaction", out_fields)
-    in_result = airtable.add_record_to_table("Acc Transaction", in_fields)
+    out_result = airtable.add_record_to_table("Acc Transactions", out_fields)
+    in_result = airtable.add_record_to_table("Acc Transactions", in_fields)
 
     if 'id' in out_result and 'id' in in_result:
         await event.respond(f"✅ Записите са добавени успешно:\n❌ {sender_label}\n✅ {receiver_label}")
