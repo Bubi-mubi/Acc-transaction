@@ -82,11 +82,12 @@ async def handler(event):
 @client.on(events.NewMessage)
 async def smart_input_handler(event):
     match = re.search(
-        r'(\d+(?:[.,]\d{1,2})?)\s*([а-яa-zА-ЯA-Z.]+)\s+от\s+(.+?)\s+(?:към|kym|kum)\s+(.+)',
+        r'(\d+(?:[.,]\d{1,2})?)\s*([а-яa-zA-Z.]+)\s+(?:от|ot)\s+(.+?)\s+(?:към|kum|kym)\s+(.+)',
         event.raw_text,
         re.IGNORECASE
     )
     if not match:
+        print("❌ Не съвпада с шаблона:", event.raw_text)
         return
 
     amount = float(match.group(1).replace(",", "."))
