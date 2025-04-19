@@ -8,10 +8,8 @@ from datetime import datetime, timedelta
 
 load_dotenv()
 
-# 📦 Памет за временни данни от потребители
 bot_memory = {}
 
-# 🔁 Нормализация на текст
 def normalize(text):
     return (
         text.lower()
@@ -46,7 +44,10 @@ airtable = AirtableClient()
 airtable.get_linked_accounts()
 
 @client.on(events.NewMessage)
-async def smart_input_handler(event):
+async def input_handler(event):
+    if event.raw_text.startswith("/notes") or event.raw_text.startswith("/delete"):
+        return  # handled by other commands
+
     match = re.search(
         r'(\d+(?:[.,]\d{1,2})?)\s*([а-яa-zA-Z.]+)\s+(?:от|ot)\s+(.+?)\s+(?:към|kum|kym|kam)\s+(.+)',
         event.raw_text,
@@ -65,119 +66,98 @@ async def smart_input_handler(event):
         await event.reply("❌ Неразпозната валута.")
         return
 
-    user_id = str(event.sender_id)
+    user_id = event.sender_id
+    sender_obj = await event.get_sender()
+    entered_by = f"{sender_obj.first_name or ''} {sender_obj.last_name or ''}".strip()
+    if not entered_by:
+        entered_by = str(user_id)
+
+    linked_accounts = airtable.get_linked_accounts()
+
+    sender_id = receiver_id = None
+    sender_label = receiver_label = ""
+
+    for norm, (label, record_id) in linked_accounts.items():
+        if all(kw in norm for kw in normalize(sender).split()):
+            sender_id = record_id
+            sender_label = label
+        if all(kw in norm for kw in normalize(receiver).split()):
+            receiver_id = record_id
+            receiver_label = label
+
+    if not sender_id or not receiver_id:
+        await event.reply("⚠️ Не можах да открия и двете страни в акаунтите.")
+        return
+
     bot_memory[user_id] = {
-        "amount": amount,
-        "currency": currency_key,
-        "sender": sender,
-        "receiver": receiver,
-        "date": event.message.date.date().isoformat()
-    }
-
-    await event.respond("📌 Въведена транзакция. Моля, изчакайте…")
-
-    # Тригерваме обработката на бутона за OUT автоматично
-    fake_event = type("Fake", (), {"data": f"out_trigger|{user_id}".encode(), "sender_id": event.sender_id, "get_sender": event.get_sender, "answer": event.answer, "edit": event.respond})()
-    await button_handler(fake_event)
-
-@client.on(events.CallbackQuery)
-async def button_handler(event):
-    data = event.data.decode("utf-8")
-
-    if "|" not in data:
-        return
-
-    action, user_id = data.split("|")
-
-    if user_id not in bot_memory:
-        await event.answer("❌ Няма активна операция.")
-        return
-
-    if action == "out_trigger":
-        payment = bot_memory[user_id]
-        linked_accounts = airtable.get_linked_accounts()
-
-        sender = await event.get_sender()
-        entered_by = f"{sender.first_name or ''} {sender.last_name or ''}".strip() or str(sender.id)
-
-        sender_id = receiver_id = None
-        sender_label = receiver_label = ""
-
-        for norm, (label, record_id) in linked_accounts.items():
-            if all(kw in norm for kw in normalize(payment['sender']).split()):
-                sender_id = record_id
-                sender_label = label
-            if all(kw in norm for kw in normalize(payment['receiver']).split()):
-                receiver_id = record_id
-                receiver_label = label
-
-        if not sender_id or not receiver_id:
-            await event.edit("⚠️ Не можах да открия и двете страни в акаунтите.")
-            return
-
-        bot_memory[event.sender_id] = {
-            "common": payment,
+        "base_data": {
+            "amount": amount,
+            "currency": currency_key,
             "sender_id": sender_id,
             "receiver_id": receiver_id,
             "sender_label": sender_label,
             "receiver_label": receiver_label,
-            "entered_by": entered_by,
-            "step": "awaiting_out_type"
-        }
+            "date": event.message.date.date().isoformat(),
+            "entered_by": entered_by
+        },
+        "step": "await_out_type"
+    }
 
-        await event.edit(
-            f"📌 Избери ВИД за акаунта със знак ❌ (OUT):",
-            buttons=[
-                [Button.inline("INCOME", b"out_type_INCOME"), Button.inline("OUTCOME", b"out_type_OUTCOME")],
-                [Button.inline("DEPOSIT", b"out_type_DEPOSIT"), Button.inline("WITHDRAW", b"out_type_WITHDRAW")],
-            ]
-        )
+    await event.respond(
+        "📌 Избери ВИД за акаунта със знак ❌ (OUT):",
+        buttons=[
+            [Button.inline("INCOME", b"type_out_income")],
+            [Button.inline("OUTCOME", b"type_out_outcome")],
+            [Button.inline("DEPOSIT", b"type_out_deposit")],
+            [Button.inline("WITHDRAW", b"type_out_withdraw")],
+        ]
+    )
 
-@client.on(events.CallbackQuery(pattern=b'(out|in)_type_(INCOME|OUTCOME|DEPOSIT|WITHDRAW)'))
+@client.on(events.CallbackQuery(pattern=b"type_(out|in)_(.+)"))
 async def handle_type_selection(event):
-    direction, tx_type = event.pattern_match.group(1).decode(), event.pattern_match.group(2).decode()
     user_id = event.sender_id
+    match = event.pattern_match
+    direction = match.group(1).decode("utf-8")
+    tx_type = match.group(2).decode("utf-8").upper()
 
     memory = bot_memory.get(user_id)
     if not memory:
         await event.answer("⛔ Няма активна операция.")
         return
 
-    currency = memory["common"]["currency"]
-    amount = abs(memory["common"]["amount"])
-    col = f"{tx_type} {currency}"
+    base = memory["base_data"]
+    col_base = f"{tx_type} {base['currency'].upper()}"
 
     if direction == "out":
         memory["out_fields"] = {
-            "DATE": memory["common"]["date"],
-            "БАНКА/БУКИ": [memory["sender_id"]],
-            col: -amount,
+            "DATE": base["date"],
+            "БАНКА/БУКИ": [base["sender_id"]],
+            col_base: -abs(base["amount"]),
             "STATUS": "Pending",
             "ЧИИ ПАРИ": "ФИРМА",
-            "NOTES": f"{memory['sender_label']} ➡️ {memory['receiver_label']}",
-            "Въвел транзакцията": memory["entered_by"],
-            "ВИД": tx_type
+            "NOTES": f"{base['sender_label']} ➡️ {base['receiver_label']}",
+            "Въвел транзакцията": base["entered_by"]
         }
-        memory["step"] = "awaiting_in_type"
-
+        memory["step"] = "await_in_type"
         await event.edit(
-            f"📌 Избери ВИД за акаунта със знак ✅ (IN):",
+            "📌 Избери ВИД за акаунта със знак ✅ (IN):",
             buttons=[
-                [Button.inline("INCOME", b"in_type_INCOME"), Button.inline("OUTCOME", b"in_type_OUTCOME")],
-                [Button.inline("DEPOSIT", b"in_type_DEPOSIT"), Button.inline("WITHDRAW", b"in_type_WITHDRAW")],
+                [Button.inline("INCOME", b"type_in_income")],
+                [Button.inline("OUTCOME", b"type_in_outcome")],
+                [Button.inline("DEPOSIT", b"type_in_deposit")],
+                [Button.inline("WITHDRAW", b"type_in_withdraw")],
             ]
         )
 
     elif direction == "in":
         memory["in_fields"] = {
-            "DATE": memory["common"]["date"],
-            "БАНКА/БУКИ": [memory["receiver_id"]],
-            col: amount,
+            "DATE": base["date"],
+            "БАНКА/БУКИ": [base["receiver_id"]],
+            col_base: abs(base["amount"]),
             "STATUS": "Pending",
             "ЧИИ ПАРИ": "ФИРМА",
-            "NOTES": f"{memory['sender_label']} ➡️ {memory['receiver_label']}",
-            "Въвел транзакцията": memory["entered_by"],
-            "ВИД": tx_type
+            "NOTES": f"{base['sender_label']} ➡️ {base['receiver_label']}",
+            "Въвел транзакцията": base["entered_by"]
         }
 
         out_result = airtable.add_record(memory["out_fields"])
@@ -187,27 +167,20 @@ async def handle_type_selection(event):
             bot_memory[user_id] = {
                 'last_airtable_ids': [out_result['id'], in_result['id']]
             }
-
             await event.edit(
-                "✅ И двата реда са записани успешно.\n\n📌 Избери статус:",
+                "✅ Въведена транзакция. 📌 Избери статус:",
                 buttons=[
                     [Button.inline("Pending", b"status_pending")],
                     [Button.inline("Arrived", b"status_arrived")],
-                    [Button.inline("Blocked", b"status_blocked")],
+                    [Button.inline("Blocked", b"status_blocked")]
                 ]
             )
         else:
-            await event.edit(f"⚠️ Грешка при запис:\nOUT: {out_result}\nIN: {in_result}")
-
-        del bot_memory[user_id]
+            await event.edit("⚠️ Грешка при запис.")
 
 @client.on(events.CallbackQuery(pattern=b'status_(pending|arrived|blocked)'))
 async def handle_status_selection(event):
-    status_value = event.pattern_match.group(1)
-    if isinstance(status_value, bytes):
-        status_value = status_value.decode("utf-8")
-    status_value = status_value.capitalize()
-
+    status_value = event.pattern_match.group(1).decode("utf-8").capitalize()
     user_id = event.sender_id
     last_ids = bot_memory.get(user_id, {}).get('last_airtable_ids', [])
 
@@ -220,4 +193,34 @@ async def handle_status_selection(event):
 
     await event.edit(f"📌 Статусът е зададен на: {status_value}")
 
-client.run_until_disconnected()
+@client.on(events.NewMessage(pattern="/notes"))
+async def notes_command_handler(event):
+    user_id = event.sender_id
+    if user_id not in bot_memory or 'last_airtable_ids' not in bot_memory[user_id]:
+        await event.respond("⚠️ Няма последни записи, към които да добавим бележка.")
+        return
+
+    bot_memory[user_id]['awaiting_note'] = True
+    await event.respond("📝 Каква бележка искаш да добавим към последните два записа?")
+
+@client.on(events.NewMessage)
+async def note_input_handler(event):
+    user_id = event.sender_id
+    if user_id not in bot_memory:
+        return
+
+    if not bot_memory[user_id].get("awaiting_note"):
+        return
+
+    note_text = event.raw_text.strip()
+    record_ids = bot_memory[user_id].get("last_airtable_ids", [])
+
+    if not record_ids:
+        await event.respond("⚠️ Не са намерени записи.")
+        return
+
+    for record_id in record_ids:
+        airtable.update_notes(record_id, note_text)
+
+    await event.respond("✅ Бележката беше добавена успешно.")
+    bot_memory[user_id]["awaiting_note"] = False
