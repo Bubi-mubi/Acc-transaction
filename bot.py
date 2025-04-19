@@ -222,15 +222,17 @@ async def button_handler(event):
                 }
 
         await event.edit(
-            f"✅ Два записа добавени успешно:\n\n❌ - {sender_label}\n✅ + {receiver_label}\n\n📌 Избери статус:",
+            "✅ И двата реда са записани успешно.\n\n📌 Избери статус:",
             buttons=[
                 [Button.inline("Pending", b"status_pending")],
                 [Button.inline("Arrived", b"status_arrived")],
-                [Button.inline("Blocked", b"status_blocked")]
+                [Button.inline("Blocked", b"status_blocked")],
             ]
         )
     else:
         await event.edit(f"⚠️ Грешка при запис:\nOUT: {out_result}\nIN: {in_result}")
+
+    del bot_memory[user_id]
 
 
 @client.on(events.CallbackQuery(pattern=b'status_(pending|arrived|blocked)'))
