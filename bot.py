@@ -44,13 +44,51 @@ airtable = AirtableClient()
 airtable.get_linked_accounts()
 
 @client.on(events.NewMessage)
-async def input_handler(event):
-    if event.raw_text.startswith("/notes") or event.raw_text.startswith("/delete"):
-        return  # handled by other commands
+async def message_router(event):
+    user_id = event.sender_id
+    text = event.raw_text.strip()
+
+    if bot_memory.get(user_id, {}).get("awaiting_note"):
+        note_text = text
+        record_ids = bot_memory[user_id].get("last_airtable_ids", [])
+        if not record_ids:
+            await event.respond("⚠️ Не са намерени записи.")
+            return
+        for record_id in record_ids:
+            airtable.update_notes(record_id, note_text)
+        await event.respond("✅ Бележката беше добавена успешно.")
+        bot_memory[user_id]["awaiting_note"] = False
+        return
+
+    if text.startswith("/notes"):
+        if user_id not in bot_memory or 'last_airtable_ids' not in bot_memory[user_id]:
+            await event.respond("⚠️ Няма последни записи, към които да добавим бележка.")
+            return
+        bot_memory[user_id]['awaiting_note'] = True
+        await event.respond("📝 Каква бележка искаш да добавим към последните два записа?")
+        return
+
+    if text.startswith("/delete"):
+        username = event.sender.username or str(user_id)
+        recent_records = airtable.get_recent_user_records(username)
+        if not recent_records:
+            await event.respond("ℹ️ Няма записи от последните 60 минути.")
+            return
+        bot_memory[user_id] = {"deletable_records": recent_records}
+        message = "🗂️ Последни записи:\n\n"
+        buttons = []
+        for i, rec in enumerate(recent_records, start=1):
+            date = rec["fields"].get("DATE", "—")
+            amount = next((v for k, v in rec["fields"].items() if isinstance(v, (int, float))), "—")
+            note = rec["fields"].get("NOTES", "—")
+            message += f"{i}. 💸 {amount} | 📅 {date} | 📝 {note}\n"
+            buttons.append(Button.inline(f"❌ Изтрий {i}", f"delete_{i}".encode()))
+        await event.respond(message + "\n👇 Избери кой да изтрием:", buttons=buttons)
+        return
 
     match = re.search(
         r'(\d+(?:[.,]\d{1,2})?)\s*([а-яa-zA-Z.]+)\s+(?:от|ot)\s+(.+?)\s+(?:към|kum|kym|kam)\s+(.+)',
-        event.raw_text,
+        text,
         re.IGNORECASE
     )
     if not match:
@@ -66,7 +104,6 @@ async def input_handler(event):
         await event.reply("❌ Неразпозната валута.")
         return
 
-    user_id = event.sender_id
     sender_obj = await event.get_sender()
     entered_by = f"{sender_obj.first_name or ''} {sender_obj.last_name or ''}".strip()
     if not entered_by:
@@ -178,6 +215,24 @@ async def handle_type_selection(event):
         else:
             await event.edit("⚠️ Грешка при запис.")
 
+@client.on(events.CallbackQuery(pattern=b"delete_([0-9]+)"))
+async def handle_delete_button(event):
+    user_id = event.sender_id
+    index = int(event.pattern_match.group(1)) - 1
+    records = bot_memory.get(user_id, {}).get("deletable_records", [])
+    if index < 0 or index >= len(records):
+        await event.answer("❌ Невалиден запис.", alert=True)
+        return
+    record = records[index]
+    record_id = record["id"]
+    note = record["fields"].get("NOTES", "—")
+    success = airtable.delete_record(record_id)
+    if success:
+        await event.edit(f"🗑️ Записът „{note}“ беше изтрит успешно.")
+    else:
+        await event.edit("⚠️ Възникна грешка при изтриването.")
+    bot_memory[user_id]["deletable_records"] = []
+
 @client.on(events.CallbackQuery(pattern=b'status_(pending|arrived|blocked)'))
 async def handle_status_selection(event):
     status_value = event.pattern_match.group(1).decode("utf-8").capitalize()
@@ -193,34 +248,4 @@ async def handle_status_selection(event):
 
     await event.edit(f"📌 Статусът е зададен на: {status_value}")
 
-@client.on(events.NewMessage(pattern="/notes"))
-async def notes_command_handler(event):
-    user_id = event.sender_id
-    if user_id not in bot_memory or 'last_airtable_ids' not in bot_memory[user_id]:
-        await event.respond("⚠️ Няма последни записи, към които да добавим бележка.")
-        return
-
-    bot_memory[user_id]['awaiting_note'] = True
-    await event.respond("📝 Каква бележка искаш да добавим към последните два записа?")
-
-@client.on(events.NewMessage)
-async def note_input_handler(event):
-    user_id = event.sender_id
-    if user_id not in bot_memory:
-        return
-
-    if not bot_memory[user_id].get("awaiting_note"):
-        return
-
-    note_text = event.raw_text.strip()
-    record_ids = bot_memory[user_id].get("last_airtable_ids", [])
-
-    if not record_ids:
-        await event.respond("⚠️ Не са намерени записи.")
-        return
-
-    for record_id in record_ids:
-        airtable.update_notes(record_id, note_text)
-
-    await event.respond("✅ Бележката беше добавена успешно.")
-    bot_memory[user_id]["awaiting_note"] = False
+client.run_until_disconnected()
