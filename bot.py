@@ -74,20 +74,14 @@ async def smart_input_handler(event):
         "date": event.message.date.date().isoformat()
     }
 
-    await event.respond(
-        f"📌 Разпознах: {amount} {currency_key} от *{sender}* към *{receiver}*.",
-        buttons=[
-            [Button.inline("INCOME", f"income|{user_id}".encode()),
-             Button.inline("OUTCOME", f"outcome|{user_id}".encode())],
-            [Button.inline("DEPOSIT", f"deposit|{user_id}".encode()),
-             Button.inline("WITHDRAW", f"withdraw|{user_id}".encode())]
-        ]
-    )
+    await event.respond("📌 Въведена транзакция. Моля, изчакайте…")
+
+    # Тригерваме обработката на бутона за OUT автоматично
+    fake_event = type("Fake", (), {"data": f"out_trigger|{user_id}".encode(), "sender_id": event.sender_id, "get_sender": event.get_sender, "answer": event.answer, "edit": event.respond})()
+    await button_handler(fake_event)
 
 @client.on(events.CallbackQuery)
 async def button_handler(event):
-    await event.answer("⏳ Момент...")
-
     data = event.data.decode("utf-8")
 
     if "|" not in data:
@@ -99,91 +93,92 @@ async def button_handler(event):
         await event.answer("❌ Няма активна операция.")
         return
 
-    payment = bot_memory[user_id]
-    action = action.upper()
-    col_base = f"{action} {payment['currency'].upper()}"
-    linked_accounts = airtable.get_linked_accounts()
+    if action == "out_trigger":
+        payment = bot_memory[user_id]
+        linked_accounts = airtable.get_linked_accounts()
 
-    sender = await event.get_sender()
-    entered_by = f"{sender.first_name or ''} {sender.last_name or ''}".strip() or str(sender.id)
+        sender = await event.get_sender()
+        entered_by = f"{sender.first_name or ''} {sender.last_name or ''}".strip() or str(sender.id)
 
-    sender_id = receiver_id = None
-    sender_label = receiver_label = ""
+        sender_id = receiver_id = None
+        sender_label = receiver_label = ""
 
-    for norm, (label, record_id) in linked_accounts.items():
-        if all(kw in norm for kw in normalize(payment['sender']).split()):
-            sender_id = record_id
-            sender_label = label
-        if all(kw in norm for kw in normalize(payment['receiver']).split()):
-            receiver_id = record_id
-            receiver_label = label
+        for norm, (label, record_id) in linked_accounts.items():
+            if all(kw in norm for kw in normalize(payment['sender']).split()):
+                sender_id = record_id
+                sender_label = label
+            if all(kw in norm for kw in normalize(payment['receiver']).split()):
+                receiver_id = record_id
+                receiver_label = label
 
-    if not sender_id or not receiver_id:
-        await event.edit("⚠️ Не можах да открия и двете страни в акаунтите.")
-        return
+        if not sender_id or not receiver_id:
+            await event.edit("⚠️ Не можах да открия и двете страни в акаунтите.")
+            return
 
-    out_fields = {
-        "DATE": payment["date"],
-        "БАНКА/БУКИ": [sender_id],
-        col_base: -abs(payment["amount"]),
-        "STATUS": "Pending",
-        "ЧИИ ПАРИ": "ФИРМА",
-        "NOTES": f"{sender_label} ➡️ {receiver_label}",
-        "Въвел транзакцията": entered_by
-    }
+        bot_memory[event.sender_id] = {
+            "common": payment,
+            "sender_id": sender_id,
+            "receiver_id": receiver_id,
+            "sender_label": sender_label,
+            "receiver_label": receiver_label,
+            "entered_by": entered_by,
+            "step": "awaiting_out_type"
+        }
 
-    in_fields = {
-        "DATE": payment["date"],
-        "БАНКА/БУКИ": [receiver_id],
-        col_base: abs(payment["amount"]),
-        "STATUS": "Pending",
-        "ЧИИ ПАРИ": "ФИРМА",
-        "NOTES": f"{sender_label} ➡️ {receiver_label}",
-        "Въвел транзакцията": entered_by
-    }
+        await event.edit(
+            f"📌 Избери ВИД за акаунта със знак ❌ (OUT):",
+            buttons=[
+                [Button.inline("INCOME", b"out_type_INCOME"), Button.inline("OUTCOME", b"out_type_OUTCOME")],
+                [Button.inline("DEPOSIT", b"out_type_DEPOSIT"), Button.inline("WITHDRAW", b"out_type_WITHDRAW")],
+            ]
+        )
 
-    bot_memory[event.sender_id] = {
-        "out_fields": out_fields,
-        "in_fields": in_fields,
-        "awaiting_type": "OUT"
-    }
-
-    await event.edit(
-        f"📌 Избери ВИД за акаунта със знак ❌ (OUT):",
-        buttons=[
-            [Button.inline("INCOME", b"type_income")],
-            [Button.inline("OUTCOME", b"type_outcome")],
-            [Button.inline("DEPOSIT", b"type_deposit")],
-            [Button.inline("WITHDRAW", b"type_withdraw")],
-        ]
-    )
-
-@client.on(events.CallbackQuery(pattern=b'type_(.+)'))
-async def handle_dual_type_selection(event):
+@client.on(events.CallbackQuery(pattern=b'(out|in)_type_(INCOME|OUTCOME|DEPOSIT|WITHDRAW)'))
+async def handle_type_selection(event):
+    direction, tx_type = event.pattern_match.group(1).decode(), event.pattern_match.group(2).decode()
     user_id = event.sender_id
-    type_selected = event.pattern_match.group(1).decode("utf-8").upper()
 
     memory = bot_memory.get(user_id)
     if not memory:
         await event.answer("⛔ Няма активна операция.")
         return
 
-    if memory["awaiting_type"] == "OUT":
-        memory["out_fields"]["ВИД"] = type_selected
-        memory["awaiting_type"] = "IN"
+    currency = memory["common"]["currency"]
+    amount = abs(memory["common"]["amount"])
+    col = f"{tx_type} {currency}"
+
+    if direction == "out":
+        memory["out_fields"] = {
+            "DATE": memory["common"]["date"],
+            "БАНКА/БУКИ": [memory["sender_id"]],
+            col: -amount,
+            "STATUS": "Pending",
+            "ЧИИ ПАРИ": "ФИРМА",
+            "NOTES": f"{memory['sender_label']} ➡️ {memory['receiver_label']}",
+            "Въвел транзакцията": memory["entered_by"],
+            "ВИД": tx_type
+        }
+        memory["step"] = "awaiting_in_type"
 
         await event.edit(
             f"📌 Избери ВИД за акаунта със знак ✅ (IN):",
             buttons=[
-                [Button.inline("INCOME", b"type_income")],
-                [Button.inline("OUTCOME", b"type_outcome")],
-                [Button.inline("DEPOSIT", b"type_deposit")],
-                [Button.inline("WITHDRAW", b"type_withdraw")],
+                [Button.inline("INCOME", b"in_type_INCOME"), Button.inline("OUTCOME", b"in_type_OUTCOME")],
+                [Button.inline("DEPOSIT", b"in_type_DEPOSIT"), Button.inline("WITHDRAW", b"in_type_WITHDRAW")],
             ]
         )
 
-    elif memory["awaiting_type"] == "IN":
-        memory["in_fields"]["ВИД"] = type_selected
+    elif direction == "in":
+        memory["in_fields"] = {
+            "DATE": memory["common"]["date"],
+            "БАНКА/БУКИ": [memory["receiver_id"]],
+            col: amount,
+            "STATUS": "Pending",
+            "ЧИИ ПАРИ": "ФИРМА",
+            "NOTES": f"{memory['sender_label']} ➡️ {memory['receiver_label']}",
+            "Въвел транзакцията": memory["entered_by"],
+            "ВИД": tx_type
+        }
 
         out_result = airtable.add_record(memory["out_fields"])
         in_result = airtable.add_record(memory["in_fields"])
