@@ -170,13 +170,56 @@ async def button_handler(event):
         "Въвел транзакцията": entered_by
     }
 
-    out_result = airtable.add_record(out_fields)
-    in_result = airtable.add_record(in_fields)
+    bot_memory[event.sender_id] = {
+        "out_fields": out_fields,
+        "in_fields": in_fields,
+        "awaiting_type": "OUT"
+    }
 
-    if 'id' in out_result and 'id' in in_result:
-        bot_memory[event.sender_id] = {
-            'last_airtable_ids': [out_result['id'], in_result['id']]
-        }
+    await event.edit(
+        f"📌 Избери ВИД за акаунта със знак ❌ (OUT):",
+        buttons=[
+            [Button.inline("INCOME", b"type_income")],
+            [Button.inline("OUTCOME", b"type_outcome")],
+            [Button.inline("DEPOSIT", b"type_deposit")],
+            [Button.inline("WITHDRAW", b"type_withdraw")],
+        ]
+    )
+
+    @client.on(events.CallbackQuery(pattern=b'type_(.+)'))
+    async def handle_dual_type_selection(event):
+        user_id = event.sender_id
+        type_selected = event.pattern_match.group(1).decode("utf-8").upper()
+
+        memory = bot_memory.get(user_id)
+        if not memory:
+            await event.answer("⛔ Няма активна операция.")
+            return
+
+        if memory["awaiting_type"] == "OUT":
+            memory["out_fields"]["ВИД"] = type_selected
+            memory["awaiting_type"] = "IN"
+
+            await event.edit(
+                f"📌 Избери ВИД за акаунта със знак ✅ (IN):",
+                buttons=[
+                    [Button.inline("INCOME", b"type_income")],
+                    [Button.inline("OUTCOME", b"type_outcome")],
+                    [Button.inline("DEPOSIT", b"type_deposit")],
+                    [Button.inline("WITHDRAW", b"type_withdraw")],
+                ]
+            )
+
+        elif memory["awaiting_type"] == "IN":
+            memory["in_fields"]["ВИД"] = type_selected
+
+            out_result = airtable.add_record(memory["out_fields"])
+            in_result = airtable.add_record(memory["in_fields"])
+
+            if 'id' in out_result and 'id' in in_result:
+                bot_memory[user_id] = {
+                    'last_airtable_ids': [out_result['id'], in_result['id']]
+                }
 
         await event.edit(
             f"✅ Два записа добавени успешно:\n\n❌ - {sender_label}\n✅ + {receiver_label}\n\n📌 Избери статус:",
