@@ -41,7 +41,6 @@ bot_token = os.getenv("BOT_TOKEN")
 
 client = TelegramClient('bot_session', api_id, api_hash).start(bot_token=bot_token)
 airtable = AirtableClient()
-airtable.get_linked_accounts()
 
 @client.on(events.NewMessage)
 async def message_router(event):
@@ -171,8 +170,6 @@ async def handle_type_selection(event):
             "БАНКА/БУКИ": [base["sender_id"]],
             col_base: -abs(base["amount"]),
             "STATUS": "Pending",
-            "ЧИИ ПАРИ": "ФИРМА",
-            "NOTES": f"{base['sender_label']} ➡️ {base['receiver_label']}",
             "Въвел транзакцията": base["entered_by"]
         }
         memory["step"] = "await_in_type"
@@ -192,8 +189,6 @@ async def handle_type_selection(event):
             "БАНКА/БУКИ": [base["receiver_id"]],
             col_base: abs(base["amount"]),
             "STATUS": "Pending",
-            "ЧИИ ПАРИ": "ФИРМА",
-            "NOTES": f"{base['sender_label']} ➡️ {base['receiver_label']}",
             "Въвел транзакцията": base["entered_by"]
         }
 
