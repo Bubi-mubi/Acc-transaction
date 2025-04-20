@@ -5,6 +5,7 @@ from telethon.tl.custom import Button
 import os
 import re
 from datetime import datetime, timedelta
+import asyncio
 
 load_dotenv()
 
@@ -41,6 +42,18 @@ bot_token = os.getenv("BOT_TOKEN")
 
 client = TelegramClient('bot_session', api_id, api_hash).start(bot_token=bot_token)
 airtable = AirtableClient()
+airtable.get_linked_accounts()
+
+@client.on(events.NewMessage(pattern="/refresh"))
+async def refresh_accounts(event):
+    airtable.get_linked_accounts(force_refresh=True)
+    await event.respond("🔄 Акаунтите са опреснени.")
+
+async def refresh_accounts_periodically():
+    while True:
+        airtable.get_linked_accounts(force_refresh=True)
+        print("🔁 Акаунтите са автоматично опреснени.")
+        await asyncio.sleep(300)  # 5 минути
 
 @client.on(events.NewMessage)
 async def message_router(event):
@@ -108,7 +121,7 @@ async def message_router(event):
     if not entered_by:
         entered_by = str(user_id)
 
-    linked_accounts = airtable.get_linked_accounts(force_refresh=True)
+    linked_accounts = airtable.get_linked_accounts()
 
     sender_id = receiver_id = None
     sender_label = receiver_label = ""
@@ -243,4 +256,6 @@ async def handle_status_selection(event):
 
     await event.edit(f"📌 Статусът е зададен на: {status_value}")
 
+loop = asyncio.get_event_loop()
+loop.create_task(refresh_accounts_periodically())
 client.run_until_disconnected()
