@@ -109,7 +109,7 @@ async def message_router(event):
     if not entered_by:
         entered_by = str(user_id)
 
-    linked_accounts = airtable.get_linked_accounts()
+    linked_accounts = airtable.get_linked_accounts(force_refresh=True)
 
     sender_id = receiver_id = None
     sender_label = receiver_label = ""
