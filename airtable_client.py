@@ -40,8 +40,8 @@ class AirtableClient:
         if response.status_code != 200:
             print(f"❌ Грешка при обновяване на NOTES за {record_id}: {response.text}")
 
-    def get_linked_accounts(self):
-        if self.cached_accounts is not None:
+    def get_linked_accounts(self, force_refresh=False):
+        if hasattr(self, 'cached_accounts') and self.cached_accounts and not force_refresh:
             return self.cached_accounts
 
         url = f"https://api.airtable.com/v0/{self.base_id}/ВСИЧКИ%20АКАУНТИ"
@@ -67,7 +67,8 @@ class AirtableClient:
                 break
 
         self.cached_accounts = mapping
-        return mapping
+        return self.cached_accounts
+
 
     def find_matching_account(self, user_input, account_dict=None):
         if account_dict is None:
