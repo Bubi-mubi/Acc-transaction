@@ -146,7 +146,7 @@ async def message_router(event):
             "receiver_id": receiver_id,
             "sender_label": sender_label,
             "receiver_label": receiver_label,
-            "date": event.message.date.date().isoformat(),
+            "date": datetime.now().isoformat(),
             "entered_by": entered_by
         },
         "step": "await_out_type"
