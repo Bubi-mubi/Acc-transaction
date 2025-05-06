@@ -57,12 +57,15 @@ async def refresh_accounts_periodically():
 
 EXCHANGE_RATES = {
     ("GBP", "BGN"): 2.25,
+    ("BGN", "GBP"): 0.44,
     ("EUR", "BGN"): 1.95,
+    ("BGN", "EUR"): 0.51,
     ("USD", "BGN"): 1.80,
+    ("BGN", "USD"): 0.56,
     ("GBP", "EUR"): 1.17,
     ("EUR", "USD"): 1.08,
-    ("BGN", "GBP"): 0.44,
-    # добави още, ако е нужно
+    ("USD", "EUR"): 0.93,
+    ("EUR", "GBP"): 0.85,
 }
 
 def convert_currency(amount, from_currency, to_currency):
