@@ -24,9 +24,9 @@ def normalize(text):
 
 CURRENCY_SYNONYMS = {
     "£": ["паунд", "паунда", "paund", "paunda", "gbp", "GBP", "gb"],
-    "BGN": ["лв", "лева", "lv", "lw", "BGN", "bgn"],
-    "EU": ["евро", "eur", "euro", "evro", "ewro", "EURO"],
-    "USD": ["долар", "долара", "usd", "dolar", "dolara", "USD"]
+    "BGN": ["лв", "лева", "lv", "lw", "BGN", "bgn", "leva", "лева", "лв.", "лв."],
+    "EU": ["евро", "eur", "euro", "evro", "ewro", "EURO", "eu", "eu."],
+    "USD": ["долар", "долара", "usd", "dolar", "dolara", "USD", "us", "us.", "дол."]
 }
 
 def get_currency_key(word):
