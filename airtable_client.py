@@ -28,7 +28,7 @@ class AirtableClient:
 
     def get_exchange_rate(self, from_currency, to_currency):
         API_KEY = os.getenv("EXCHANGE_RATE_API_KEY")
-        url = f"https://v6.exchangerate-api.com/v6/{API_KEY}/latest/{from_currency}"
+        url = f"https://v6.exchangerate-api.com/v6/{EXCHANGE_RATE_API_KEY}/latest/{from_currency}"
 
         try:
             response = requests.get(url)
