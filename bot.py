@@ -24,9 +24,9 @@ def normalize(text):
 
 CURRENCY_SYNONYMS = {
     "£": ["паунд", "паунда", "paund", "paunda", "gbp", "GBP", "gb"],
-    "BGN": ["лв", "лева", "lv", "lw", "BGN", "bgn", "leva", "лева", "лв.", "лв."],
-    "EU": ["евро", "eur", "euro", "evro", "ewro", "EURO", "eu", "eu."],
-    "USD": ["долар", "долара", "usd", "dolar", "dolara", "USD", "us", "us.", "дол."]
+    "BGN": ["лв", "лева", "lv", "lw", "BGN", "bgn"],
+    "EU": ["евро", "eur", "euro", "evro", "ewro", "EURO"],
+    "USD": ["долар", "долара", "usd", "dolar", "dolara", "USD"]
 }
 
 def get_currency_key(word):
@@ -54,27 +54,6 @@ async def refresh_accounts_periodically():
         airtable.get_linked_accounts(force_refresh=True)
         print("🔁 Акаунтите са автоматично опреснени.")
         await asyncio.sleep(300)  # 5 минути
-
-EXCHANGE_RATES = {
-    ("GBP", "BGN"): 2.25,
-    ("BGN", "GBP"): 0.44,
-    ("EUR", "BGN"): 1.95,
-    ("BGN", "EUR"): 0.51,
-    ("USD", "BGN"): 1.80,
-    ("BGN", "USD"): 0.56,
-    ("GBP", "EUR"): 1.17,
-    ("EUR", "USD"): 1.08,
-    ("USD", "EUR"): 0.93,
-    ("EUR", "GBP"): 0.85,
-}
-
-def convert_currency(amount, from_currency, to_currency):
-    if from_currency == to_currency:
-        return amount
-    rate = EXCHANGE_RATES.get((from_currency, to_currency))
-    if rate:
-        return round(amount * rate, 2)
-    return None
 
 @client.on(events.NewMessage)
 async def message_router(event):
@@ -120,37 +99,22 @@ async def message_router(event):
         return
 
     match = re.search(
-        r'(\d+(?:[.,]\d{1,2})?)\s*([а-яa-zA-Z.]+)\s+(?:от|ot)\s+(.+?)\s+(?:към|kum|kym)\s+(?:([а-яa-zA-Z.]+)\s+)?(.+)',
-        event.raw_text,
+        r'(\d+(?:[.,]\d{1,2})?)\s*([а-яa-zA-Z.]+)\s+(?:от|ot)\s+(.+?)\s+(?:към|kum|kym|kam)\s+(.+)',
+        text,
         re.IGNORECASE
     )
-
     if not match:
         return
 
     amount = float(match.group(1).replace(",", "."))
     currency_raw = match.group(2).strip()
     sender = match.group(3).strip()
-    receiver_currency_raw = match.group(4)  # това е валутата след "към" (ако има)
-    receiver = match.group(5).strip()
+    receiver = match.group(4).strip()
 
     currency_key = get_currency_key(currency_raw)
     if not currency_key:
         await event.reply("❌ Неразпозната валута.")
         return
-
-    receiver_currency = get_currency_key(receiver_currency_raw) if receiver_currency_raw else None
-
-    if receiver_currency and receiver_currency != currency_key:
-        converted_amount = convert_currency(amount, currency_key, receiver_currency)
-        if converted_amount is None:
-            await event.reply("❌ Не мога да превалутирам. Липсва курс между валутите.")
-            return
-    else:
-        receiver_currency = currency_key
-        converted_amount = amount
-
-
 
     sender_obj = await event.get_sender()
     entered_by = f"{sender_obj.first_name or ''} {sender_obj.last_name or ''}".strip()
@@ -162,12 +126,13 @@ async def message_router(event):
     sender_id = receiver_id = None
     sender_label = receiver_label = ""
 
-    sender_id = airtable.find_matching_account(sender, linked_accounts)
-    receiver_id = airtable.find_matching_account(receiver, linked_accounts)
-
-    # търсим обратно label-а по ID
-    sender_label = next((label for label, id in linked_accounts.values() if id == sender_id), sender)
-    receiver_label = next((label for label, id in linked_accounts.values() if id == receiver_id), receiver)
+    for norm, (label, record_id) in linked_accounts.items():
+        if all(kw in norm for kw in normalize(sender).split()):
+            sender_id = record_id
+            sender_label = label
+        if all(kw in norm for kw in normalize(receiver).split()):
+            receiver_id = record_id
+            receiver_label = label
 
     if not sender_id or not receiver_id:
         await event.reply("⚠️ Не можах да открия и двете страни в акаунтите.")
@@ -182,10 +147,7 @@ async def message_router(event):
             "sender_label": sender_label,
             "receiver_label": receiver_label,
             "date": datetime.now().isoformat(),
-            "entered_by": entered_by,
-            "receiver_currency": receiver_currency,
-            "converted_amount": converted_amount,
-
+            "entered_by": entered_by
         },
         "step": "await_out_type"
     }
@@ -213,14 +175,7 @@ async def handle_type_selection(event):
         return
 
     base = memory["base_data"]
-    col_base = f"{tx_type} {base['receiver_currency']}".upper()
-    memory["in_fields"] = {
-        "DATE": base["date"],
-        "БАНКА/БУКИ": [base["receiver_id"]],
-        col_base: abs(base["converted_amount"]),
-        "STATUS": "Pending",
-        "Въвел транзакцията": base["entered_by"]
-    }
+    col_base = f"{tx_type} {base['currency'].upper()}"
 
     if direction == "out":
         memory["out_fields"] = {
@@ -245,7 +200,7 @@ async def handle_type_selection(event):
         memory["in_fields"] = {
             "DATE": base["date"],
             "БАНКА/БУКИ": [base["receiver_id"]],
-            col_base: abs(base["converted_amount"]),  # ✅ това е с правилната валута
+            col_base: abs(base["amount"]),
             "STATUS": "Pending",
             "Въвел транзакцията": base["entered_by"]
         }
