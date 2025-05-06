@@ -30,17 +30,28 @@ class AirtableClient:
         API_KEY = os.getenv("EXCHANGE_RATE_API_KEY")
         url = f"https://v6.exchangerate-api.com/v6/{API_KEY}/latest/{from_currency}"
 
-        response = requests.get(url)
-        data = response.json()
+        try:
+            response = requests.get(url)
+            if response.status_code != 200:
+                print(f"❌ Грешка при заявката: status {response.status_code}")
+                print("Сървър върна:", response.text)
+                return None
+
+            data = response.json()
+        except Exception as e:
+            print(f"❌ Изключение при получаване на курс: {e}")
+            print("Отговор от сървъра:", response.text if response else "(няма отговор)")
+            return None
 
         if data.get("result") == "success":
             rate = data["conversion_rates"].get(to_currency)
             if rate:
                 return rate
-        print("❌ Грешка при извличане на валутен курс.")
-        return None
-        
-    def update_notes(self, record_id, note):
+
+        print("❌ Грешка: result != success или липсва валутен курс.")
+        return None  # ⬅️ последният ред в get_exchange_rate()
+
+    def update_notes(self, record_id, note):  # ⬅️ напълно отделна функция, със същия отстъп като всички методи
         url = f"{self.base_url}/{self.table_name}/{record_id}"
         data = {
             "fields": {
@@ -53,6 +64,8 @@ class AirtableClient:
 
         if response.status_code != 200:
             print(f"❌ Грешка при обновяване на NOTES за {record_id}: {response.text}")
+
+
 
     def get_linked_accounts(self, force_refresh=False):
         if hasattr(self, 'cached_accounts') and self.cached_accounts and not force_refresh:
