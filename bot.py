@@ -153,7 +153,8 @@ async def message_router(event):
             "sender_label": sender_label,
             "receiver_label": receiver_label,
             "date": datetime.now().isoformat(),
-            "entered_by": entered_by
+            "entered_by": entered_by,
+            "receiver_currency": receiver_currency_key
         },
         "step": "await_out_type"
     }
@@ -204,7 +205,7 @@ async def handle_type_selection(event):
 
     elif direction == "in":
         out_currency = base["currency"]  # оригинална валута от изпращача
-        in_currency = receiver_currency_key  # валута на получателя
+        in_currency = base["receiver_currency"] # валута на получателя
 
         converted_amount = base["amount"]
 
