@@ -139,12 +139,17 @@ async def message_router(event):
         await event.reply("❌ Неразпозната валута.")
         return
 
-    receiver_currency = get_currency_key(receiver_currency_raw) if receiver_currency_raw else currency_key
-    converted_amount = convert_currency(amount, currency_key, receiver_currency)
+    receiver_currency = get_currency_key(receiver_currency_raw) if receiver_currency_raw else None
 
-    if converted_amount is None:
-        await event.reply("❌ Не мога да превалутирам. Липсва курс между валутите.")
-        return
+    if receiver_currency and receiver_currency != currency_key:
+        converted_amount = convert_currency(amount, currency_key, receiver_currency)
+        if converted_amount is None:
+            await event.reply("❌ Не мога да превалутирам. Липсва курс между валутите.")
+            return
+    else:
+        receiver_currency = currency_key
+        converted_amount = amount
+
 
 
     sender_obj = await event.get_sender()
