@@ -162,13 +162,12 @@ async def message_router(event):
     sender_id = receiver_id = None
     sender_label = receiver_label = ""
 
-    for norm, (label, record_id) in linked_accounts.items():
-        if all(kw in norm for kw in normalize(sender).split()):
-            sender_id = record_id
-            sender_label = label
-        if all(kw in norm for kw in normalize(receiver).split()):
-            receiver_id = record_id
-            receiver_label = label
+    sender_id = airtable.find_matching_account(sender, linked_accounts)
+    receiver_id = airtable.find_matching_account(receiver, linked_accounts)
+
+    # търсим обратно label-а по ID
+    sender_label = next((label for label, id in linked_accounts.values() if id == sender_id), sender)
+    receiver_label = next((label for label, id in linked_accounts.values() if id == receiver_id), receiver)
 
     if not sender_id or not receiver_id:
         await event.reply("⚠️ Не можах да открия и двете страни в акаунтите.")
