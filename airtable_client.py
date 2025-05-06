@@ -33,14 +33,13 @@ class AirtableClient:
         response = requests.get(url)
         data = response.json()
 
-    if data.get("result") == "success":
-        rate = data["conversion_rates"].get(to_currency)
-        if rate:
-            return rate
-    print("❌ Грешка при извличане на валутен курс.")
-    return None
-
-
+        if data.get("result") == "success":
+            rate = data["conversion_rates"].get(to_currency)
+            if rate:
+                return rate
+        print("❌ Грешка при извличане на валутен курс.")
+        return None
+        
     def update_notes(self, record_id, note):
         url = f"{self.base_url}/{self.table_name}/{record_id}"
         data = {
