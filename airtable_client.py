@@ -91,8 +91,11 @@ class AirtableClient:
 
     def add_record(self, fields: dict):
         data = {"fields": fields}
-        response = requests.post(self.endpoint, headers=self.headers, json=data)
+        response = requests.post(
+            self.endpoint, headers=self.headers, json=data, params={"typecast": "true"}
+        )
         return response.json()
+
 
     def update_status(self, record_id, status):
         print(f"➡️ Обновяване на запис: {record_id} със STATUS: {status}")
