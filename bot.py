@@ -99,7 +99,7 @@ async def message_router(event):
         return
 
     match = re.search(
-        r'(\d+(?:[.,]\d{1,2})?)\s*([а-яa-zA-Z.]+)\s+(?:от|ot)\s+(.+?)\s+(?:към|kum|kym|kam)\s+(.+)',
+        r'(\d+(?:[.,]\d{1,2})?)\s*([а-яa-zA-Z.]+)\s+(?:от|ot)\s+(.+?)\s+(?:към|kum|kym|kam)\s+(?:(\w+)\s+)?(.+)',
         text,
         re.IGNORECASE
     )
