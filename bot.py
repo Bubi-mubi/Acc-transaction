@@ -55,6 +55,24 @@ async def refresh_accounts_periodically():
         print("🔁 Акаунтите са автоматично опреснени.")
         await asyncio.sleep(300)  # 5 минути
 
+EXCHANGE_RATES = {
+    ("GBP", "BGN"): 2.25,
+    ("EUR", "BGN"): 1.95,
+    ("USD", "BGN"): 1.80,
+    ("GBP", "EUR"): 1.17,
+    ("EUR", "USD"): 1.08,
+    ("BGN", "GBP"): 0.44,
+    # добави още, ако е нужно
+}
+
+def convert_currency(amount, from_currency, to_currency):
+    if from_currency == to_currency:
+        return amount
+    rate = EXCHANGE_RATES.get((from_currency, to_currency))
+    if rate:
+        return round(amount * rate, 2)
+    return None
+
 @client.on(events.NewMessage)
 async def message_router(event):
     user_id = event.sender_id
@@ -99,22 +117,32 @@ async def message_router(event):
         return
 
     match = re.search(
-        r'(\d+(?:[.,]\d{1,2})?)\s*([а-яa-zA-Z.]+)\s+(?:от|ot)\s+(.+?)\s+(?:към|kum|kym|kam)\s+(.+)',
-        text,
+        r'(\d+(?:[.,]\d{1,2})?)\s*([а-яa-zA-Z.]+)\s+(?:от|ot)\s+(.+?)\s+(?:към|kum|kym)\s+(?:([а-яa-zA-Z.]+)\s+)?(.+)',
+        event.raw_text,
         re.IGNORECASE
     )
+
     if not match:
         return
 
     amount = float(match.group(1).replace(",", "."))
     currency_raw = match.group(2).strip()
     sender = match.group(3).strip()
-    receiver = match.group(4).strip()
+    receiver_currency_raw = match.group(4)  # това е валутата след "към" (ако има)
+    receiver = match.group(5).strip()
 
     currency_key = get_currency_key(currency_raw)
     if not currency_key:
         await event.reply("❌ Неразпозната валута.")
         return
+
+    receiver_currency = get_currency_key(receiver_currency_raw) if receiver_currency_raw else currency_key
+    converted_amount = convert_currency(amount, currency_key, receiver_currency)
+
+    if converted_amount is None:
+        await event.reply("❌ Не мога да превалутирам. Липсва курс между валутите.")
+        return
+
 
     sender_obj = await event.get_sender()
     entered_by = f"{sender_obj.first_name or ''} {sender_obj.last_name or ''}".strip()
@@ -147,7 +175,10 @@ async def message_router(event):
             "sender_label": sender_label,
             "receiver_label": receiver_label,
             "date": datetime.now().isoformat(),
-            "entered_by": entered_by
+            "entered_by": entered_by,
+            "receiver_currency": receiver_currency,
+            "converted_amount": converted_amount,
+
         },
         "step": "await_out_type"
     }
@@ -175,7 +206,14 @@ async def handle_type_selection(event):
         return
 
     base = memory["base_data"]
-    col_base = f"{tx_type} {base['currency'].upper()}"
+    col_base = f"{tx_type} {base['receiver_currency']}".upper()
+    memory["in_fields"] = {
+        "DATE": base["date"],
+        "БАНКА/БУКИ": [base["receiver_id"]],
+        col_base: abs(base["converted_amount"]),
+        "STATUS": "Pending",
+        "Въвел транзакцията": base["entered_by"]
+    }
 
     if direction == "out":
         memory["out_fields"] = {
@@ -200,7 +238,7 @@ async def handle_type_selection(event):
         memory["in_fields"] = {
             "DATE": base["date"],
             "БАНКА/БУКИ": [base["receiver_id"]],
-            col_base: abs(base["amount"]),
+            col_base: abs(base["converted_amount"]),  # ✅ това е с правилната валута
             "STATUS": "Pending",
             "Въвел транзакцията": base["entered_by"]
         }
