@@ -109,11 +109,17 @@ async def message_router(event):
     amount = float(match.group(1).replace(",", "."))
     currency_raw = match.group(2).strip()
     sender = match.group(3).strip()
-    receiver = match.group(4).strip()
+    receiver_currency_raw = match.group(4)  # Може да е None
+    receiver = match.group(5).strip()
 
     currency_key = get_currency_key(currency_raw)
     if not currency_key:
-        await event.reply("❌ Неразпозната валута.")
+        await event.reply("❌ Неразпозната валута на изпращача.")
+        return
+
+    receiver_currency_key = get_currency_key(receiver_currency_raw) if receiver_currency_raw else currency_key
+    if receiver_currency_raw and not receiver_currency_key:
+        await event.reply("❌ Неразпозната валута на получателя.")
         return
 
     sender_obj = await event.get_sender()
@@ -197,23 +203,41 @@ async def handle_type_selection(event):
         )
 
     elif direction == "in":
+        out_currency = base["currency"]  # оригинална валута от изпращача
+        in_currency = receiver_currency_key  # валута на получателя
+
+        converted_amount = base["amount"]
+
+        # Проверка дали трябва да превалутираме
+        if out_currency != in_currency:
+            # Извличаме курса от airtable_client
+            rate = airtable.get_exchange_rate(out_currency, in_currency)
+            if not rate:
+                await event.edit("⚠️ Грешка при извличане на валутен курс.")
+                return
+            # изчисляваме сумата по новия курс
+            converted_amount = round(base["amount"] * rate, 2)
+
+        # записваме входящия ред в Airtable с конвертираната валута
         memory["in_fields"] = {
             "DATE": base["date"],
             "БАНКА/БУКИ": [base["receiver_id"]],
-            col_base: abs(base["amount"]),
+            f"{tx_type} {in_currency.upper()}": abs(converted_amount),
             "STATUS": "Pending",
             "Въвел транзакцията": base["entered_by"]
         }
 
+        # записваме изходящия и входящия ред
         out_result = airtable.add_record(memory["out_fields"])
         in_result = airtable.add_record(memory["in_fields"])
 
+        # проверка дали записът е успешен
         if 'id' in out_result and 'id' in in_result:
             bot_memory[user_id] = {
                 'last_airtable_ids': [out_result['id'], in_result['id']]
             }
             await event.edit(
-                "✅ Въведена транзакция. 📌 Избери статус:",
+                "✅ Въведена транзакция с превалутиране. 📌 Избери статус:",
                 buttons=[
                     [Button.inline("Pending", b"status_pending")],
                     [Button.inline("Arrived", b"status_arrived")],
