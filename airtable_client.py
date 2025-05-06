@@ -26,6 +26,21 @@ class AirtableClient:
         }
         self.cached_accounts = None  # Кеширан списък с акаунти
 
+    def get_exchange_rate(self, from_currency, to_currency):
+        API_KEY = os.getenv("EXCHANGE_RATE_API_KEY")
+        url = f"https://v6.exchangerate-api.com/v6/{API_KEY}/latest/{from_currency}"
+
+        response = requests.get(url)
+        data = response.json()
+
+    if data.get("result") == "success":
+        rate = data["conversion_rates"].get(to_currency)
+        if rate:
+            return rate
+    print("❌ Грешка при извличане на валутен курс.")
+    return None
+
+
     def update_notes(self, record_id, note):
         url = f"{self.base_url}/{self.table_name}/{record_id}"
         data = {
