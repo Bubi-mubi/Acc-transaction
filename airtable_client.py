@@ -38,6 +38,7 @@ class AirtableClient:
                 return None
 
             data = response.json()
+            print("📊 Пълен отговор от API:", data)
         except Exception as e:
             print(f"❌ Изключение при получаване на курс: {e}")
             print("Отговор от сървъра:", response.text if response else "(няма отговор)")
@@ -46,6 +47,7 @@ class AirtableClient:
         if data.get("result") == "success":
             rate = data["conversion_rates"].get(to_currency)
             if rate:
+                print(f"📈 Търсен курс: 1 {from_currency} → {to_currency} = {rate}")
                 return rate
 
         print("❌ Грешка: result != success или липсва валутен курс.")
