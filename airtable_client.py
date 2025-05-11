@@ -54,16 +54,10 @@ class AirtableClient:
 
         try:
             response = requests.get(url)
-            if response.status_code != 200:
-                print(f"❌ Грешка при заявката: status {response.status_code}")
-                print("Сървър върна:", response.text)
-                return None
-
+            response.raise_for_status()  # Ще хвърли грешка, ако статус кодът не е 200
             data = response.json()
-            print("📊 Пълен отговор от API:", data)
-        except Exception as e:
-            print(f"❌ Изключение при получаване на курс: {e}")
-            print("Отговор от сървъра:", response.text if response else "(няма отговор)")
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Грешка при заявката към API: {e}")
             return None
 
         if data.get("result") == "success":
@@ -88,8 +82,8 @@ class AirtableClient:
 
         if response.status_code != 200:
             print(f"❌ Грешка при обновяване на NOTES за {record_id}: {response.text}")
-
-
+            return False
+        return True
 
     def get_linked_accounts(self, force_refresh=False):
         if hasattr(self, 'cached_accounts') and self.cached_accounts and not force_refresh:
@@ -105,6 +99,10 @@ class AirtableClient:
                 full_url += f"?offset={offset}"
 
             response = requests.get(full_url, headers=self.headers)
+            if response.status_code != 200:
+                print(f"❌ Грешка при извличане на акаунти: {response.status_code} – {response.text}")
+                return {}
+
             data = response.json()
 
             for record in data.get("records", []):
@@ -143,6 +141,9 @@ class AirtableClient:
     def add_record(self, fields: dict):
         data = {"fields": fields}
         response = requests.post(self.endpoint, headers=self.headers, json=data)
+        if response.status_code != 200:
+            print(f"❌ Грешка при добавяне на запис: {response.status_code} – {response.text}")
+            return None
         return response.json()
 
     def update_status(self, record_id, status):
@@ -181,5 +182,8 @@ class AirtableClient:
         url = f"{self.base_url}/{self.table_name}/{record_id}"
         response = requests.delete(url, headers=self.headers)
         print(f"🗑️ Изтриване на запис {record_id}: {response.status_code}")
-        return response.status_code == 200
+        if response.status_code != 200:
+            print(f"❌ Грешка при изтриване на запис {record_id}: {response.text}")
+            return False
+        return True
 
