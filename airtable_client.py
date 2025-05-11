@@ -1,6 +1,7 @@
 import os
 import requests
 import difflib
+from datetime import datetime, timedelta
 
 CURRENCY_SYNONYMS = {
     "£": ["паунд", "паунда", "paund", "paunda", "gbp", "GBP", "gb"],
@@ -18,6 +19,7 @@ def normalize_currency(currency):
     return None  # Ако валутата не е разпозната
 
 def normalize(text):
+    """Нормализира текст чрез премахване на специални символи и преобразуване към малки букви."""
     return (
         text.lower()
         .replace("-", " ")
@@ -42,6 +44,7 @@ class AirtableClient:
         self.cached_accounts = None  # Кеширан списък с акаунти
 
     def get_exchange_rate(self, from_currency, to_currency):
+        """Извлича валутния курс между две валути чрез API."""
         from_currency = normalize_currency(from_currency)
         to_currency = normalize_currency(to_currency)
 
@@ -71,7 +74,8 @@ class AirtableClient:
         print("❌ Грешка: result != success или липсва валутен курс.")
         return None
 
-    def update_notes(self, record_id, note):  # ⬅️ напълно отделна функция, със същия отстъп като всички методи
+    def update_notes(self, record_id, note):
+        """Актуализира NOTES полето на запис в Airtable."""
         url = f"{self.base_url}/{self.table_name}/{record_id}"
         data = {
             "fields": {
@@ -89,6 +93,7 @@ class AirtableClient:
         return True
 
     def get_linked_accounts(self, force_refresh=False):
+        """Извлича свързаните акаунти от Airtable."""
         if hasattr(self, 'cached_accounts') and self.cached_accounts and not force_refresh:
             return self.cached_accounts
 
@@ -121,8 +126,8 @@ class AirtableClient:
         self.cached_accounts = mapping
         return self.cached_accounts
 
-
     def find_matching_account(self, user_input, account_dict=None):
+        """Намира най-близкия акаунт чрез fuzzy matching."""
         if account_dict is None:
             account_dict = self.get_linked_accounts()
 
@@ -142,6 +147,7 @@ class AirtableClient:
         return None
 
     def add_record(self, fields: dict):
+        """Добавя нов запис в Airtable."""
         data = {"fields": fields}
         response = requests.post(self.endpoint, headers=self.headers, json=data)
         if response.status_code != 200:
@@ -150,6 +156,7 @@ class AirtableClient:
         return response.json()
 
     def update_status(self, record_id, status):
+        """Актуализира STATUS полето на запис в Airtable."""
         print(f"➡️ Обновяване на запис: {record_id} със STATUS: {status}")
 
         url = f"{self.base_url}/{self.table_name}/{record_id}"
@@ -165,8 +172,11 @@ class AirtableClient:
 
         if response.status_code != 200:
             print(f"❌ Грешка при обновяване на {record_id}: {response.text}")
+            return False
+        return True
 
     def get_recent_user_records(self, user_filter_text, within_minutes=60):
+        """Извлича записи на потребител за последните N минути."""
         now = datetime.utcnow()
         cutoff = now - timedelta(minutes=within_minutes)
         cutoff_iso = cutoff.isoformat()
@@ -184,6 +194,7 @@ class AirtableClient:
         return data.get("records", [])
 
     def delete_record(self, record_id):
+        """Изтрива запис от Airtable."""
         url = f"{self.base_url}/{self.table_name}/{record_id}"
         response = requests.delete(url, headers=self.headers)
         print(f"🗑️ Изтриване на запис {record_id}: {response.status_code}")

@@ -36,6 +36,20 @@ def get_currency_key(word):
             return key
     return None
 
+# Фиксирани валутни курсове
+FIXED_EXCHANGE_RATES = {
+    ("GBP", "BGN"): 2.25,  # 1 GBP = 2.25 BGN
+    ("BGN", "GBP"): 0.44,  # 1 BGN = 0.44 GBP
+    ("USD", "BGN"): 1.80,  # 1 USD = 1.80 BGN
+    ("BGN", "USD"): 0.56,  # 1 BGN = 0.56 USD
+    ("EUR", "BGN"): 1.95,  # 1 EUR = 1.95 BGN
+    ("BGN", "EUR"): 0.51,  # 1 BGN = 0.51 EUR
+}
+
+def get_fixed_exchange_rate(from_currency, to_currency):
+    """Връща фиксирания валутен курс между две валути."""
+    return FIXED_EXCHANGE_RATES.get((from_currency, to_currency))
+
 api_id = int(os.getenv("API_ID"))
 api_hash = os.getenv("API_HASH")
 bot_token = os.getenv("BOT_TOKEN")
@@ -178,7 +192,7 @@ async def message_router(event):
         # Изчисляване на превалутиране
         converted_amount = amount
         if sender_currency_key != receiver_currency_key:
-            rate = airtable.get_exchange_rate(sender_currency_key, receiver_currency_key)
+            rate = get_fixed_exchange_rate(sender_currency_key, receiver_currency_key)
             if not rate:
                 await event.reply("⚠️ Грешка при извличане на валутен курс.")
                 return
@@ -217,6 +231,7 @@ async def message_router(event):
 
 @client.on(events.CallbackQuery(pattern=b"type_(out|in)_(.+)"))
 async def handle_type_selection(event):
+    print("🔍 Обработваме бутон:", event.pattern_match)
     user_id = event.sender_id
     match = event.pattern_match
     direction = match.group(1).decode("utf-8")
@@ -251,21 +266,21 @@ async def handle_type_selection(event):
 
     elif direction == "in":
         out_currency = base["currency"]  # оригинална валута от изпращача
-        in_currency = base["receiver_currency"] # валута на получателя
+        in_currency = base["receiver_currency"]  # валута на получателя
 
         converted_amount = base["amount"]
 
         # Проверка дали трябва да превалутираме
         if out_currency != in_currency:
-            # Извличаме курса от airtable_client
-            rate = airtable.get_exchange_rate(out_currency, in_currency)
+            # Използваме фиксираните курсове
+            rate = get_fixed_exchange_rate(out_currency, in_currency)
             if not rate:
-                await event.edit("⚠️ Грешка при извличане на валутен курс.")
+                await event.edit(f"⚠️ Няма фиксиран курс за {out_currency} → {in_currency}.")
                 return
-            # изчисляваме сумата по новия курс
+            # Изчисляваме сумата по новия курс
             converted_amount = round(base["amount"] * rate, 2)
 
-        # записваме входящия ред в Airtable с конвертираната валута
+        # Записваме входящия ред в Airtable с конвертираната валута
         memory["in_fields"] = {
             "DATE": base["date"],
             "БАНКА/БУКИ": [base["receiver_id"]],
@@ -274,11 +289,11 @@ async def handle_type_selection(event):
             "Въвел транзакцията": base["entered_by"]
         }
 
-        # записваме изходящия и входящия ред
+        # Записваме изходящия и входящия ред
         out_result = airtable.add_record(memory["out_fields"])
         in_result = airtable.add_record(memory["in_fields"])
 
-        # проверка дали записът е успешен
+        # Проверка дали записът е успешен
         if 'id' in out_result and 'id' in in_result:
             bot_memory[user_id] = {
                 'last_airtable_ids': [out_result['id'], in_result['id']]
