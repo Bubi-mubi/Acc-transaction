@@ -2,6 +2,21 @@ import os
 import requests
 import difflib
 
+CURRENCY_SYNONYMS = {
+    "£": ["паунд", "паунда", "paund", "paunda", "gbp", "GBP", "gb"],
+    "BGN": ["лв", "лева", "lv", "lw", "BGN", "bgn"],
+    "EU": ["евро", "eur", "euro", "evro", "ewro", "EURO"],
+    "USD": ["долар", "долара", "usd", "dolar", "dolara", "USD"]
+}
+
+def normalize_currency(currency):
+    """Нормализира валутата към стандартен формат (BGN, USD, GBP, EU)."""
+    currency = currency.lower().strip()
+    for key, synonyms in CURRENCY_SYNONYMS.items():
+        if currency in synonyms:
+            return key
+    return None  # Ако валутата не е разпозната
+
 def normalize(text):
     return (
         text.lower()
@@ -27,6 +42,13 @@ class AirtableClient:
         self.cached_accounts = None  # Кеширан списък с акаунти
 
     def get_exchange_rate(self, from_currency, to_currency):
+        from_currency = normalize_currency(from_currency)
+        to_currency = normalize_currency(to_currency)
+
+        if not from_currency or not to_currency:
+            print(f"❌ Неразпозната валута: {from_currency} или {to_currency}")
+            return None
+
         API_KEY = os.getenv("EXCHANGE_RATE_API_KEY")
         url = f"https://v6.exchangerate-api.com/v6/{API_KEY}/latest/{from_currency}"
 
@@ -51,7 +73,7 @@ class AirtableClient:
                 return rate
 
         print("❌ Грешка: result != success или липсва валутен курс.")
-        return None  # ⬅️ последният ред в get_exchange_rate()
+        return None
 
     def update_notes(self, record_id, note):  # ⬅️ напълно отделна функция, със същия отстъп като всички методи
         url = f"{self.base_url}/{self.table_name}/{record_id}"

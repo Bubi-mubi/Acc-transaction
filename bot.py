@@ -103,6 +103,87 @@ async def message_router(event):
         text,
         re.IGNORECASE
     )
+    if match:
+        amount = float(match.group(1).replace(",", "."))
+        sender_currency_raw = match.group(2).strip()
+        sender = match.group(3).strip()
+        receiver_currency_raw = match.group(4).strip()
+        receiver = match.group(5).strip()
+
+        sender_currency_key = get_currency_key(sender_currency_raw)
+        if not sender_currency_key:
+            await event.reply("❌ Неразпозната валута на изпращача.")
+            return
+
+        receiver_currency_key = get_currency_key(receiver_currency_raw)
+        if not receiver_currency_key:
+            await event.reply("❌ Неразпозната валута на получателя.")
+            return
+
+        sender_obj = await event.get_sender()
+        entered_by = f"{sender_obj.first_name or ''} {sender_obj.last_name or ''}".strip()
+        if not entered_by:
+            entered_by = str(user_id)
+
+        linked_accounts = airtable.get_linked_accounts()
+
+        sender_id = receiver_id = None
+        sender_label = receiver_label = ""
+
+        for norm, (label, record_id) in linked_accounts.items():
+            if all(kw in norm for kw in normalize(sender).split()):
+                sender_id = record_id
+                sender_label = label
+            if all(kw in norm for kw in normalize(receiver).split()):
+                receiver_id = record_id
+                receiver_label = label
+
+        if not sender_id or not receiver_id:
+            await event.reply("⚠️ Не можах да открия и двете страни в акаунтите.")
+            return
+
+        # Изчисляване на превалутиране
+        converted_amount = amount
+        if sender_currency_key != receiver_currency_key:
+            rate = airtable.get_exchange_rate(sender_currency_key, receiver_currency_key)
+            if not rate:
+                await event.reply("⚠️ Грешка при извличане на валутен курс.")
+                return
+            converted_amount = round(amount * rate, 2)
+
+        # Запис в паметта на бота
+        bot_memory[user_id] = {
+            "base_data": {
+                "amount": amount,
+                "currency": sender_currency_key,
+                "sender_id": sender_id,
+                "receiver_id": receiver_id,
+                "sender_label": sender_label,
+                "receiver_label": receiver_label,
+                "date": datetime.now().isoformat(),
+                "entered_by": entered_by,
+                "receiver_currency": receiver_currency_key,
+                "converted_amount": converted_amount
+            },
+            "step": "await_out_type"
+        }
+
+        await event.respond(
+            "📌 Избери ВИД за акаунта със знак ❌ (OUT):",
+            buttons=[
+                [Button.inline("INCOME", b"type_out_income")],
+                [Button.inline("OUTCOME", b"type_out_outcome")],
+                [Button.inline("DEPOSIT", b"type_out_deposit")],
+                [Button.inline("WITHDRAW", b"type_out_withdraw")],
+            ]
+        )
+        return
+
+    match = re.search(
+        r'(\d+(?:[.,]\d{1,2})?)\s*([а-яa-zA-Z.]+)\s+(?:от|ot)\s+(.+?)\s+(?:към|kum|kym|kam)\s+(?:(лв|лева|leva|евро|evro|EUR|eur|usd|USD|dolara|долар|долара|паунд|paunda|paund|gbp|BGN|EUR|USD|GBP)\s+)?(.+)',
+        text,
+        re.IGNORECASE
+    )
     if not match:
         return
 
