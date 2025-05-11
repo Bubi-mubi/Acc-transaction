@@ -62,9 +62,11 @@ class AirtableClient:
 
         if data.get("result") == "success":
             rate = data["conversion_rates"].get(to_currency)
-            if rate:
-                print(f"📈 Търсен курс: 1 {from_currency} → {to_currency} = {rate}")
-                return rate
+            if not rate:
+                print(f"❌ Липсва валутен курс за {from_currency} → {to_currency}")
+                return None
+            print(f"📈 Търсен курс: 1 {from_currency} → {to_currency} = {rate}")
+            return rate
 
         print("❌ Грешка: result != success или липсва валутен курс.")
         return None
@@ -77,6 +79,7 @@ class AirtableClient:
             }
         }
 
+        print(f"➡️ Заявка към {url} с данни: {data}")
         response = requests.patch(url, json=data, headers=self.headers, params={"typecast": "true"})
         print(f"📝 Обновен NOTES за {record_id}: {response.status_code} – {response.text}")
 
@@ -163,8 +166,6 @@ class AirtableClient:
         if response.status_code != 200:
             print(f"❌ Грешка при обновяване на {record_id}: {response.text}")
 
-        from datetime import datetime, timedelta
-
     def get_recent_user_records(self, user_filter_text, within_minutes=60):
         now = datetime.utcnow()
         cutoff = now - timedelta(minutes=within_minutes)
@@ -174,6 +175,10 @@ class AirtableClient:
         url = f"{self.endpoint}?filterByFormula={filter_formula}"
 
         response = requests.get(url, headers=self.headers)
+        if response.status_code != 200:
+            print(f"❌ Грешка при извличане на записи: {response.status_code} – {response.text}")
+            return []
+
         data = response.json()
 
         return data.get("records", [])
