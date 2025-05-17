@@ -1,6 +1,7 @@
 import os
 import requests
 import difflib
+from datetime import datetime, timedelta
 
 def normalize(text):
     return (
@@ -25,8 +26,18 @@ class AirtableClient:
             "Content-Type": "application/json"
         }
         self.cached_accounts = None  # Кеширан списък с акаунти
+        self.exchange_rate_cache = {}  # Кеш за валутни курсове
 
     def get_exchange_rate(self, from_currency, to_currency):
+        # Проверка за кеширани курсове
+        cache_key = f"{from_currency}_{to_currency}"
+        if cache_key in self.exchange_rate_cache:
+            cached_rate, timestamp = self.exchange_rate_cache[cache_key]
+            if (datetime.utcnow() - timestamp).seconds < 3600:  # Кешът е валиден за 1 час
+                print(f"📥 Използване на кеширан курс: 1 {from_currency} → {to_currency} = {cached_rate}")
+                return cached_rate
+
+        # Ако няма кеш, извличаме курса от API
         API_KEY = os.getenv("EXCHANGE_RATE_API_KEY")
         url = f"https://v6.exchangerate-api.com/v6/{API_KEY}/latest/{from_currency}"
 
@@ -41,17 +52,18 @@ class AirtableClient:
             print("📊 Пълен отговор от API:", data)
         except Exception as e:
             print(f"❌ Изключение при получаване на курс: {e}")
-            print("Отговор от сървъра:", response.text if response else "(няма отговор)")
             return None
 
         if data.get("result") == "success":
             rate = data["conversion_rates"].get(to_currency)
             if rate:
                 print(f"📈 Търсен курс: 1 {from_currency} → {to_currency} = {rate}")
+                # Запазване на курса в кеша
+                self.exchange_rate_cache[cache_key] = (rate, datetime.utcnow())
                 return rate
 
         print("❌ Грешка: result != success или липсва валутен курс.")
-        return None  # ⬅️ последният ред в get_exchange_rate()
+        return None
 
     def update_notes(self, record_id, note):  # ⬅️ напълно отделна функция, със същия отстъп като всички методи
         url = f"{self.base_url}/{self.table_name}/{record_id}"
@@ -66,8 +78,6 @@ class AirtableClient:
 
         if response.status_code != 200:
             print(f"❌ Грешка при обновяване на NOTES за {record_id}: {response.text}")
-
-
 
     def get_linked_accounts(self, force_refresh=False):
         if hasattr(self, 'cached_accounts') and self.cached_accounts and not force_refresh:
@@ -97,7 +107,6 @@ class AirtableClient:
 
         self.cached_accounts = mapping
         return self.cached_accounts
-
 
     def find_matching_account(self, user_input, account_dict=None):
         if account_dict is None:
@@ -140,8 +149,6 @@ class AirtableClient:
         if response.status_code != 200:
             print(f"❌ Грешка при обновяване на {record_id}: {response.text}")
 
-        from datetime import datetime, timedelta
-
     def get_recent_user_records(self, user_filter_text, within_minutes=60):
         now = datetime.utcnow()
         cutoff = now - timedelta(minutes=within_minutes)
@@ -160,3 +167,13 @@ class AirtableClient:
         response = requests.delete(url, headers=self.headers)
         print(f"🗑️ Изтриване на запис {record_id}: {response.status_code}")
         return response.status_code == 200
+
+client = AirtableClient()
+
+# Тест за валиден курс
+rate = client.get_exchange_rate("GBP", "BGN")
+print(f"Курс GBP → BGN: {rate}")
+
+# Тест за невалидна валута
+rate = client.get_exchange_rate("INVALID", "BGN")
+print(f"Курс INVALID → BGN: {rate}")
