@@ -6,6 +6,7 @@ import os
 import re
 from datetime import datetime, timedelta
 import asyncio
+import requests
 
 load_dotenv()
 
@@ -44,6 +45,53 @@ def get_cached_exchange_rate(from_currency, to_currency):
             cached_rates[(from_currency, to_currency)] = rate
     return cached_rates.get((from_currency, to_currency))
 
+class AirtableClient:
+    def __init__(self):
+        self.exchange_rate_cache = {}
+
+    def get_exchange_rate(self, from_currency, to_currency):
+        # Проверка за валидни кодове на валути
+        valid_currencies = ["GBP", "BGN", "USD", "EUR"]
+        if from_currency not in valid_currencies or to_currency not in valid_currencies:
+            print(f"❌ Невалиден код на валута: {from_currency} или {to_currency}")
+            return None
+
+        # Проверка за кеширани курсове
+        cache_key = f"{from_currency}_{to_currency}"
+        if cache_key in self.exchange_rate_cache:
+            cached_rate, timestamp = self.exchange_rate_cache[cache_key]
+            if (datetime.utcnow() - timestamp).seconds < 3600:  # Кешът е валиден за 1 час
+                print(f"📥 Използване на кеширан курс: 1 {from_currency} → {to_currency} = {cached_rate}")
+                return cached_rate
+
+        # Ако няма кеш, извличаме курса от API
+        API_KEY = os.getenv("EXCHANGE_RATE_API_KEY")
+        url = f"https://v6.exchangerate-api.com/v6/{API_KEY}/latest/{from_currency}"
+
+        try:
+            response = requests.get(url)
+            if response.status_code != 200:
+                print(f"❌ Грешка при заявката: status {response.status_code}")
+                print("Сървър върна:", response.text)
+                return None
+
+            data = response.json()
+            print("📊 Пълен отговор от API:", data)
+        except Exception as e:
+            print(f"❌ Изключение при получаване на курс: {e}")
+            return None
+
+        if data.get("result") == "success":
+            rate = data["conversion_rates"].get(to_currency)
+            if rate:
+                print(f"📈 Търсен курс: 1 {from_currency} → {to_currency} = {rate}")
+                # Запазване на курса в кеша
+                self.exchange_rate_cache[cache_key] = (rate, datetime.utcnow())
+                return rate
+
+        print("❌ Грешка: result != success или липсва валутен курс.")
+        return None
+
 api_id = int(os.getenv("API_ID"))
 api_hash = os.getenv("API_HASH")
 bot_token = os.getenv("BOT_TOKEN")
@@ -51,6 +99,14 @@ bot_token = os.getenv("BOT_TOKEN")
 client = TelegramClient('bot_session', api_id, api_hash).start(bot_token=bot_token)
 airtable = AirtableClient()
 airtable.get_linked_accounts()
+
+# Тест с валидни валути
+rate = airtable.get_exchange_rate("GBP", "BGN")
+print(f"Курс GBP → BGN: {rate}")
+
+# Тест с невалидна валута
+rate = airtable.get_exchange_rate("INVALID", "BGN")
+print(f"Курс INVALID → BGN: {rate}")
 
 @client.on(events.NewMessage(pattern="/refresh"))
 async def refresh_accounts(event):
@@ -168,7 +224,7 @@ async def handle_type_selection(event):
         return
 
     base = memory["base_data"]
-    col_base = f"{tx_type} {base['curgit add .rency'].upper()}"
+    col_base = f"{tx_type} {base['currency'].upper()}"
 
     if direction == "out":
         memory["out_fields"] = {
