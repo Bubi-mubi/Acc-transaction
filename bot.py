@@ -97,7 +97,14 @@ api_hash = os.getenv("API_HASH")
 bot_token = os.getenv("BOT_TOKEN")
 
 client = TelegramClient('bot_session', api_id, api_hash).start(bot_token=bot_token)
+
+# Импортиране на AirtableClient
+from airtable_client import AirtableClient
+
+# Създаване на екземпляр
 airtable = AirtableClient()
+
+# Извикване на метода
 airtable.get_linked_accounts()
 
 # Тест с валидни валути
